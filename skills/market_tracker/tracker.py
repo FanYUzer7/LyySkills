@@ -383,18 +383,15 @@ def main():
 
 def _handle_watchlist(tracker: MarketTracker, args: dict):
     """处理 watchlist 子命令"""
-    sub_args = sys.argv[3:] if len(sys.argv) > 3 else []
-    sub_parsed = _parse_args(sub_args)
-
     sub_cmd = sys.argv[2] if len(sys.argv) > 2 else "list"
 
     wl = tracker.watchlist
 
     if sub_cmd == "add":
-        code = sub_parsed.get("code", args.get("code", ""))
-        name = sub_parsed.get("name", args.get("name", ""))
-        asset_type = sub_parsed.get("type", args.get("type", "stock"))
-        group = sub_parsed.get("group", args.get("group", "默认"))
+        code = args.get("code", "")
+        name = args.get("name", "")
+        asset_type = args.get("type", "stock")
+        group = args.get("group", "默认")
         if not code or not name:
             print("错误: --code 和 --name 为必填")
             sys.exit(1)
@@ -403,7 +400,7 @@ def _handle_watchlist(tracker: MarketTracker, args: dict):
               f"[{ASSET_TYPE_NAMES.get(asset_type, asset_type)}]")
 
     elif sub_cmd == "remove":
-        code = sub_parsed.get("code", args.get("code", ""))
+        code = args.get("code", "")
         if not code:
             print("错误: --code 为必填")
             sys.exit(1)
@@ -413,8 +410,8 @@ def _handle_watchlist(tracker: MarketTracker, args: dict):
             print(f"⚠️ 未找到: {code}")
 
     elif sub_cmd == "list":
-        group = sub_parsed.get("group", args.get("group"))
-        asset_type = sub_parsed.get("type", args.get("type"))
+        group = args.get("group")
+        asset_type = args.get("type")
         items = wl.list_all(group=group, asset_type=asset_type)
         print(f"📋 自选列表 ({len(items)} 个)")
         print(wl.format_table(items))

@@ -204,9 +204,9 @@ class MarketDataFetcher:
             elif asset_type == "etf":
                 return self._fetch_etf_kline(code, period, start_date, end_date)
             elif asset_type == "futures":
-                return self._fetch_futures_kline(code)
+                return self._fetch_futures_kline(code, start_date, end_date)
             elif asset_type == "gold":
-                return self._fetch_gold_kline(code)
+                return self._fetch_gold_kline(code, start_date, end_date)
             return None
         except Exception as e:
             print(f"⚠️ 获取 {code} K线数据失败: {e}")
@@ -233,17 +233,29 @@ class MarketDataFetcher:
             start_date=start_date, end_date=end_date, adjust="qfq")
         return _normalize_kline_df(df)
 
-    def _fetch_futures_kline(self, code):
-        df = ak.futures_main_sina(symbol=code)
+    def _fetch_futures_kline(self, code, start_date=None, end_date=None):
+        kwargs = {"symbol": code}
+        if start_date:
+            kwargs["start_date"] = start_date
+        if end_date:
+            kwargs["end_date"] = end_date
+        df = ak.futures_main_sina(**kwargs)
         return _normalize_kline_df(df)
 
-    def _fetch_gold_kline(self, code):
+    def _fetch_gold_kline(self, code, start_date=None, end_date=None):
         # 黄金使用上海金交所或期货主力
         try:
             df = ak.spot_hist_sge(symbol=code)
-            return _normalize_kline_df(df)
+            df = _normalize_kline_df(df)
+            # spot_hist_sge 不支持日期参数，获取后手动过滤
+            if df is not None and not df.empty and "date" in df.columns:
+                if start_date:
+                    df = df[df["date"] >= _fmt_date_dash(start_date)]
+                if end_date:
+                    df = df[df["date"] <= _fmt_date_dash(end_date)]
+            return df
         except Exception:
-            return self._fetch_futures_kline(code)
+            return self._fetch_futures_kline(code, start_date, end_date)
 
     # ==========================================================
     # 市场概览

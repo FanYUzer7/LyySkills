@@ -1,5 +1,49 @@
 # Skill: 实时市场跟踪与投资决策 (Market Tracker)
 
+## 环境要求与安装
+
+### 前置条件
+- **Python >= 3.10**（代码使用了 `str | dict` 等联合类型语法）
+- pip 包管理器
+
+### 安装依赖
+
+```bash
+pip install -r skills/market_tracker/requirements.txt
+```
+
+### 工作目录
+
+所有命令需在包含 `skills/` 目录的**父目录**下执行，确保 Python 能正确解析 `skills.market_tracker` 包路径。
+
+```bash
+# 假设目录结构如下:
+# /path/to/workspace/
+# └── skills/
+#     └── market_tracker/
+#         ├── __init__.py
+#         ├── tracker.py
+#         └── ...
+
+cd /path/to/workspace
+python3 -m skills.market_tracker.tracker <command>
+```
+
+如果 skill 安装在其他路径（如 `tools/market_tracker/`），需调整包名：
+```bash
+python3 -m tools.market_tracker.tracker <command>
+```
+
+### 快速验证安装
+
+```bash
+# 检查是否可以正常导入
+python3 -c "from skills.market_tracker.tracker import MarketTracker; print('✅ 安装成功')"
+
+# 查看帮助
+python3 -m skills.market_tracker.tracker
+```
+
 ## 触发条件
 
 当用户请求以下内容时触发此 skill：
