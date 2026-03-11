@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from .config import DEFAULT_HISTORY_DAYS
 from .db import MarketDB
+from .errors import MarketTrackerError as MTE
 
 
 class MarketDataFetcher:
@@ -37,15 +38,16 @@ class MarketDataFetcher:
             elif asset_type == "gold":
                 return self._realtime_gold(code)
             else:
-                return None
+                return MTE.make(code, MTE.INVALID_CODE, f"不支持的资产类型: {asset_type}")
         except Exception as e:
-            return {"error": str(e), "code": code}
+            ec = MTE.classify_exception(e)
+            return MTE.make(code, ec, str(e))
 
     def _realtime_stock(self, code: str) -> dict | None:
         df = ak.stock_zh_a_spot_em()
         row = df[df["代码"] == code]
         if row.empty:
-            return None
+            return MTE.make(code, MTE.DATA_NOT_FOUND, "未A股实时行情中找到该代码")
         r = row.iloc[0]
         return {
             "name": r.get("名称", ""),
@@ -209,7 +211,8 @@ class MarketDataFetcher:
                 return self._fetch_gold_kline(code, start_date, end_date)
             return None
         except Exception as e:
-            print(f"⚠️ 获取 {code} K线数据失败: {e}")
+            ec = MTE.classify_exception(e)
+            print(f"⚠️ 获取 {code} K线数据失败: [{ec}] {e}")
             return None
 
     def _fetch_stock_kline(self, code, period, start_date, end_date):
@@ -280,7 +283,7 @@ class MarketDataFetcher:
                         "turnover": _safe_float(r.get("成交额")),
                     })
         except Exception as e:
-            overview.append({"error": str(e)})
+            overview.append(MTE.make("overview", MTE.classify_exception(e), str(e)))
         return overview
 
 

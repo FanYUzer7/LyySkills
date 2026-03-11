@@ -16,6 +16,7 @@ from .db import MarketDB
 from .watchlist import Watchlist
 from .data_fetcher import MarketDataFetcher
 from .decision_engine import InvestmentDecision
+from .errors import format_error_for_display
 
 CST = timezone(timedelta(hours=8))
 
@@ -58,7 +59,7 @@ class MarketTracker:
         if "error" in result:
             if output_format == "json":
                 return result
-            return f"⚠️ 分析失败: {result['error']}"
+            return format_error_for_display(result)
 
         if output_format == "json":
             return _serialize(result)
@@ -105,7 +106,7 @@ class MarketTracker:
         if "error" in result:
             if output_format == "json":
                 return result
-            return f"⚠️ 分析失败: {result['error']}"
+            return format_error_for_display(result)
 
         if output_format == "json":
             return _serialize(result)
