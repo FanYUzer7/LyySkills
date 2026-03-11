@@ -7,7 +7,11 @@
 import sys
 import json
 import time
+import warnings
 from datetime import datetime, timezone, timedelta
+
+# 抑制第三方库警告
+warnings.filterwarnings('ignore', message='pkg_resources is deprecated')
 
 from .config import (
     ASSET_TYPE_NAMES, DEFAULT_MONITOR_INTERVAL, TEST_DATA_DIR,
@@ -270,24 +274,16 @@ class MarketTracker:
         tech_result.pop("_test_data_path", None)
 
         # 2. 资讯分析（需要 finance_news skill）
+        # finance_news analyzer.py --file --format json 输出的是已处理的结果，直接读取即可
         news_result = None
         if news_file:
             try:
-                import os
-                sys.path.insert(0, os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-                from finance_news.analyzer import FinancialNewsAnalyzer
-
                 with open(news_file, "r", encoding="utf-8") as f:
-                    news_json = f.read()
-                analyzer = FinancialNewsAnalyzer()
-                analyzer.load_news(news_json)
-                news_result = {
-                    "sentiment": analyzer.analyze_market_sentiment(),
-                    "events": analyzer.extract_key_events(),
-                    "sectors": analyzer.analyze_sector_performance(),
-                    "news_count": len(analyzer.news_data),
-                }
+                    news_result = json.load(f)
+            except json.JSONDecodeError as e:
+                news_result = {"error": f"资讯文件JSON解析失败: {e}"}
+            except FileNotFoundError:
+                news_result = {"error": f"资讯文件不存在: {news_file}"}
             except Exception as e:
                 news_result = {"error": f"资讯分析失败: {e}"}
 
@@ -314,8 +310,9 @@ class MarketTracker:
             lines.append("📰 【资讯情绪分析】")
             lines.append(sep)
             sentiment = news_result.get("sentiment", {})
+            conf = sentiment.get("confidence", 0)
             lines.append(f"   市场情绪: {sentiment.get('sentiment', '未知')} "
-                         f"(置信度: {sentiment.get('confidence', 0)}%)")
+                         f"(置信度: {conf * 100:.0f}%)")
             lines.append(f"   资讯数量: {news_result.get('news_count', 0)} 条")
 
             events = news_result.get("events", [])
@@ -899,7 +896,7 @@ def _handle_watchlist(tracker: MarketTracker, args: dict):
 
 
 def _print_usage():
-    print("""用法: python -m skills.market_tracker.tracker <command> [options]
+    print("""用法: python3 -m skills.market_tracker.tracker <command> [options]
 
 命令:
   watchlist add    --code CODE --name NAME --type TYPE [--group GROUP]
@@ -939,12 +936,12 @@ K线周期 (--period):
   --ma-periods 5,20,60 均线周期列表 (逗号分隔)
 
 示例:
-  python -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock
-  python -m skills.market_tracker.tracker analyze --code 600519 --type stock
-  python -m skills.market_tracker.tracker analyze --code 600519 --type stock --period weekly
-  python -m skills.market_tracker.tracker overview
-  python -m skills.market_tracker.tracker backtest --code 600519 --type stock --test
-  python -m skills.market_tracker.tracker monitor --interval 300
+  python3 -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock
+  python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock
+  python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --period weekly
+  python3 -m skills.market_tracker.tracker overview
+  python3 -m skills.market_tracker.tracker backtest --code 600519 --type stock --test
+  python3 -m skills.market_tracker.tracker monitor --interval 300
 """)
 
 
