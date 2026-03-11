@@ -31,60 +31,35 @@ class MarketTracker:
         self.watchlist = Watchlist()
         self.fetcher = MarketDataFetcher(self.db)
         self.engine = InvestmentDecision()
+        # 用于 monitor 信号变化检测：{code: {"action": str, "score": float}}
+        self._prev_signals = {}
 
     # ==========================================================
     # 单标的分析
     # ==========================================================
-    def analyze(self, code: str, asset_type: str,
-                output_format: str = "text",
-                test_mode: bool = False,
-                period: str = "daily") -> str | dict:
-        """
-        对单个标的执行完整分析。
-        :param code: 资产代码
-        :param asset_type: stock/index/etf/futures/gold
-        :param output_format: "text" 或 "json"
-        :param test_mode: 使用本地测试数据，跳过网络请求
-        :param period: K线周期 daily/weekly/monthly
-        :return: 格式化报告或 dict
-        """
+    def _analyze_raw(self, code: str, asset_type: str,
+                     test_mode: bool = False,
+                     period: str = "daily") -> dict:
+        """执行分析并返回原始结果 dict（含 error 时也是 dict）"""
         if test_mode:
-            return self._analyze_from_test_data(code, asset_type, output_format, period)
+            return self._analyze_raw_test(code, asset_type, period)
 
-        # 1. 获取实时行情
         quote = self.fetcher.get_realtime_quote(code, asset_type)
-
-        # 2. 获取历史K线 (自动增量缓存)
         df = self.fetcher.get_history_kline(code, asset_type, period=period)
+        return self.engine.analyze(df, quote)
 
-        # 3. 决策分析
-        result = self.engine.analyze(df, quote)
-
-        if "error" in result:
-            if output_format == "json":
-                return result
-            return format_error_for_display(result)
-
-        if output_format == "json":
-            return _serialize(result)
-
-        return self._format_report(code, asset_type, result, period)
-
-    def _analyze_from_test_data(self, code: str, asset_type: str,
-                                output_format: str,
-                                period: str = "daily") -> str | dict:
-        """离线测试模式：从 test_data/ 加载数据进行分析"""
+    def _analyze_raw_test(self, code: str, asset_type: str,
+                          period: str = "daily") -> dict:
+        """离线测试模式的原始分析"""
         import os
         import pandas as pd
 
-        # 查找测试数据文件：优先精确匹配 {code}.json，否则用 sample_kline.json
         exact_path = os.path.join(TEST_DATA_DIR, f"{code}.json")
         sample_path = os.path.join(TEST_DATA_DIR, "sample_kline.json")
         data_path = exact_path if os.path.exists(exact_path) else sample_path
 
         if not os.path.exists(data_path):
-            msg = f"测试数据文件不存在: {data_path}"
-            return {"error": msg} if output_format == "json" else f"⚠️ {msg}"
+            return {"error": f"测试数据文件不存在: {data_path}"}
 
         with open(data_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -92,7 +67,6 @@ class MarketTracker:
         if "amount" in df.columns and "turnover" not in df.columns:
             df["turnover"] = df["amount"]
 
-        # 构造模拟行情
         last = df.iloc[-1]
         quote = {
             "name": f"[测试] {code}",
@@ -107,18 +81,40 @@ class MarketTracker:
         }
 
         result = self.engine.analyze(df, quote)
+        result["_test_data_path"] = os.path.basename(data_path)
+        return result
+
+    def analyze(self, code: str, asset_type: str,
+                output_format: str = "text",
+                test_mode: bool = False,
+                period: str = "daily") -> str | dict:
+        """
+        对单个标的执行完整分析。
+        :param code: 资产代码
+        :param asset_type: stock/index/etf/futures/gold
+        :param output_format: "text" 或 "json"
+        :param test_mode: 使用本地测试数据，跳过网络请求
+        :param period: K线周期 daily/weekly/monthly
+        :return: 格式化报告或 dict
+        """
+        result = self._analyze_raw(code, asset_type, test_mode, period)
 
         if "error" in result:
             if output_format == "json":
                 return result
             return format_error_for_display(result)
 
+        # 提取内部标记后再序列化
+        test_data_path = result.pop("_test_data_path", None)
+
         if output_format == "json":
             return _serialize(result)
 
         report = self._format_report(code, asset_type, result, period)
-        period_label = PERIOD_NAMES.get(period, period)
-        return f"🧪 [离线测试模式] 数据来源: {os.path.basename(data_path)} | 周期: {period_label}\n\n{report}"
+        if test_mode and test_data_path:
+            period_label = PERIOD_NAMES.get(period, period)
+            report = f"🧪 [离线测试模式] 数据来源: {test_data_path} | 周期: {period_label}\n\n{report}"
+        return report
 
     # ==========================================================
     # 全自选分析
@@ -196,7 +192,7 @@ class MarketTracker:
     # 定时监控
     # ==========================================================
     def monitor(self, interval: int = DEFAULT_MONITOR_INTERVAL):
-        """定时轮询模式"""
+        """定时轮询模式，支持信号变化检测"""
         print(f"🔄 启动市场监控 (间隔: {interval}秒)")
         print(f"   监控标的: {self.watchlist.count()} 个")
         print(f"   按 Ctrl+C 停止\n")
@@ -205,7 +201,59 @@ class MarketTracker:
                 now = datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{'='*60}")
                 print(f"⏰ {now} 开始扫描...")
-                print(self.analyze_all())
+
+                items = self.watchlist.list_all()
+                if not items:
+                    print("📋 自选列表为空，请先添加标的。")
+                else:
+                    changes = []
+                    for item in items:
+                        code = item["code"]
+                        asset_type = item["asset_type"]
+
+                        # 单次分析获取原始结果
+                        result = self._analyze_raw(code, asset_type)
+
+                        if "error" in result:
+                            print(format_error_for_display(result))
+                            continue
+
+                        # 打印文本报告
+                        print(self._format_report(code, asset_type, result))
+
+                        # 信号变化检测
+                        action_info = result.get("action", {})
+                        cur_action = action_info.get("action", "")
+                        cur_score = result.get("final_score", 0)
+
+                        prev = self._prev_signals.get(code)
+                        if prev and prev["action"] != cur_action:
+                            changes.append({
+                                "code": code,
+                                "name": (result.get("quote") or {}).get("name", code),
+                                "prev_action": prev["action"],
+                                "cur_action": cur_action,
+                                "prev_score": prev["score"],
+                                "cur_score": cur_score,
+                            })
+
+                        self._prev_signals[code] = {
+                            "action": cur_action,
+                            "score": cur_score,
+                        }
+
+                    # 信号变化摘要
+                    if changes:
+                        print(f"\n{'─'*60}")
+                        print(f"🔔 【信号变化提醒】 共 {len(changes)} 个标的信号变化:")
+                        for c in changes:
+                            print(f"   ⚡ {c['name']} ({c['code']}): "
+                                  f"{c['prev_action']} → {c['cur_action']} "
+                                  f"(得分: {c['prev_score']:+.2f} → {c['cur_score']:+.2f})")
+                        print(f"{'─'*60}")
+                    elif self._prev_signals:
+                        print(f"\n   ℹ️ 本轮扫描无信号变化")
+
                 print(f"\n⏰ 下次扫描: {interval}秒后\n")
                 time.sleep(interval)
         except KeyboardInterrupt:
