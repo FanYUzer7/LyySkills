@@ -178,6 +178,53 @@ class MarketTracker:
         return "\n".join(lines)
 
     # ==========================================================
+    # 数据导出
+    # ==========================================================
+    def export(self, code: str, asset_type: str,
+               period: str = "daily",
+               output_path: str = None,
+               test_mode: bool = False) -> str:
+        """导出K线数据 + 技术指标到 CSV"""
+        import pandas as pd
+        from . import indicators as ind
+        from .indicators import compute_all_indicators
+
+        if test_mode:
+            import os
+            exact = os.path.join(TEST_DATA_DIR, f"{code}.json")
+            sample = os.path.join(TEST_DATA_DIR, "sample_kline.json")
+            path = exact if os.path.exists(exact) else sample
+            if not os.path.exists(path):
+                return f"⚠️ 测试数据文件不存在: {path}"
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            df = pd.DataFrame(data)
+            if "amount" in df.columns and "turnover" not in df.columns:
+                df["turnover"] = df["amount"]
+        else:
+            df = self.fetcher.get_history_kline(code, asset_type, period=period)
+
+        if df is None or df.empty:
+            return "⚠️ 无可导出的数据"
+
+        # 计算所有技术指标
+        indicators = compute_all_indicators(df)
+        for name, series in indicators.items():
+            if isinstance(series, pd.Series):
+                df[name] = series.values
+
+        # 确定输出路径
+        if not output_path:
+            output_path = f"{code}_{period}.csv"
+
+        # 移除非数据列
+        drop_cols = ["code", "asset_type"]
+        df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
+
+        df.to_csv(output_path, index=False, encoding="utf-8-sig")
+        return f"✅ 已导出到 {output_path} ({len(df)} 行, {len(df.columns)} 列)"
+
+    # ==========================================================
     # 全自选分析
     # ==========================================================
     def analyze_all(self, output_format: str = "text") -> str | list:
@@ -631,6 +678,18 @@ def main():
         else:
             print(result)
 
+    elif cmd == "export":
+        code = args.get("code", "")
+        asset_type = args.get("type", "stock")
+        period = args.get("period", "daily")
+        output_path = args.get("output", None)
+        test_mode = args.get("test", False)
+        if not code:
+            print("错误: --code 为必填")
+            sys.exit(1)
+        print(tracker.export(code, asset_type, period=period,
+                             output_path=output_path, test_mode=test_mode))
+
     else:
         print(f"未知命令: {cmd}")
         _print_usage()
@@ -691,6 +750,7 @@ def _print_usage():
   monitor     [--interval SECONDS]
   backtest    --code CODE --type TYPE [--period PERIOD] [--format json] [--test]
   history     [--code CODE] [--limit N] [--format json]
+  export      --code CODE --type TYPE [--period PERIOD] [--output FILE] [--test]
 
 资产类型 (--type):
   stock    A股个股
