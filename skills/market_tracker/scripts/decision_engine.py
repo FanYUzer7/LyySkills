@@ -5,15 +5,25 @@ Layer 2: 基于量化因子的评分（借鉴 AlphaGPT 思路，numpy/pandas 实
 综合两层信号得出最终投资决策
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import numpy as np
 import pandas as pd
 
-from . import indicators as ind
-from .config import (
-    INDICATOR_PARAMS, SIGNAL_WEIGHTS, FACTOR_WEIGHTS,
-    LAYER_WEIGHTS, DECISION_THRESHOLDS, FACTOR_PARAMS,
-    RSI_OVERBOUGHT, RSI_OVERSOLD, ADX_TREND_THRESHOLD,
-)
+import indicators as ind
+import config
+
+INDICATOR_PARAMS = config.INDICATOR_PARAMS
+SIGNAL_WEIGHTS = config.SIGNAL_WEIGHTS
+FACTOR_WEIGHTS = config.FACTOR_WEIGHTS
+LAYER_WEIGHTS = config.LAYER_WEIGHTS
+DECISION_THRESHOLDS = config.DECISION_THRESHOLDS
+FACTOR_PARAMS = config.FACTOR_PARAMS
+RSI_OVERBOUGHT = config.RSI_OVERBOUGHT
+RSI_OVERSOLD = config.RSI_OVERSOLD
+ADX_TREND_THRESHOLD = config.ADX_TREND_THRESHOLD
 
 
 # ==============================================================

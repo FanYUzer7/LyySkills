@@ -2,9 +2,16 @@
 市场跟踪器 - 主入口
 编排：数据获取 → 指标计算 → 决策输出
 支持 CLI 和模块调用
+
+支持独立运行:
+    python scripts/tracker.py analyze --code 600519 --type stock
+    python scripts/tracker.py analyze-all
 """
 
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import json
 import time
 import warnings
@@ -13,16 +20,28 @@ from datetime import datetime, timezone, timedelta
 # 抑制第三方库警告
 warnings.filterwarnings('ignore', message='pkg_resources is deprecated')
 
-from .config import (
-    ASSET_TYPE_NAMES, DEFAULT_MONITOR_INTERVAL, TEST_DATA_DIR,
-    VALID_PERIODS, PERIOD_NAMES, DAILY_ONLY_ASSET_TYPES,
-)
-from .db import MarketDB
-from .watchlist import Watchlist
-from .data_fetcher import MarketDataFetcher
-from .decision_engine import InvestmentDecision
-from .backtest import BacktestEngine, format_backtest_report
-from .errors import format_error_for_display
+import config
+import db
+import watchlist
+import data_fetcher
+import decision_engine
+import backtest
+import errors
+
+ASSET_TYPE_NAMES = config.ASSET_TYPE_NAMES
+DEFAULT_MONITOR_INTERVAL = config.DEFAULT_MONITOR_INTERVAL
+TEST_DATA_DIR = config.TEST_DATA_DIR
+VALID_PERIODS = config.VALID_PERIODS
+PERIOD_NAMES = config.PERIOD_NAMES
+DAILY_ONLY_ASSET_TYPES = config.DAILY_ONLY_ASSET_TYPES
+
+MarketDB = db.MarketDB
+Watchlist = watchlist.Watchlist
+MarketDataFetcher = data_fetcher.MarketDataFetcher
+InvestmentDecision = decision_engine.InvestmentDecision
+BacktestEngine = backtest.BacktestEngine
+format_backtest_report = backtest.format_backtest_report
+format_error_for_display = errors.format_error_for_display
 
 CST = timezone(timedelta(hours=8))
 
@@ -190,8 +209,8 @@ class MarketTracker:
                test_mode: bool = False) -> str:
         """导出K线数据 + 技术指标到 CSV"""
         import pandas as pd
-        from . import indicators as ind
-        from .indicators import compute_all_indicators
+        import indicators as ind
+        from indicators import compute_all_indicators
 
         if test_mode:
             import os
@@ -700,8 +719,8 @@ def _parse_args(argv: list[str]) -> dict:
 
 def _build_indicator_overrides(args: dict) -> dict | None:
     """从 CLI 参数构建指标参数覆盖"""
-    from .config import INDICATOR_PARAMS
     import copy
+    INDICATOR_PARAMS = config.INDICATOR_PARAMS
 
     # 支持的覆盖参数映射
     overrides = {}

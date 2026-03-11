@@ -28,17 +28,17 @@ pip install -r skills/market_tracker/requirements.txt
 #         └── ...
 
 cd /path/to/workspace
-python3 -m skills.market_tracker.tracker <command>
+python scripts/tracker.py <command>
 ```
 
 ### 快速验证安装
 
 ```bash
 # 离线测试模式（无需网络，使用内置测试数据）
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --test
+python scripts/tracker.py analyze --code 600519 --type stock --test
 
 # 查看帮助
-python3 -m skills.market_tracker.tracker
+python scripts/tracker.py
 ```
 
 ## 触发条件
@@ -90,61 +90,77 @@ python3 -m skills.market_tracker.tracker
 | `--bb-period N` | 布林带周期 | 20 |
 | `--ma-periods 5,20,60` | 均线周期列表（逗号分隔） | 5,20,60 |
 
+### 独立脚本（无需完整 CLI）
+
+除了主 CLI，还可以单独运行各模块获取数据：
+
+```bash
+# 获取实时行情 + K线数据
+python scripts/data_fetcher.py --code 600519 --type stock
+
+# 查询缓存的K线数据
+python scripts/db.py --code 600519 --period daily --limit 100
+
+# 管理自选列表（独立CLI）
+python scripts/watchlist.py add --code 600519 --name 贵州茅台 --type stock
+python scripts/watchlist.py list
+```
+
 ### 1. 自选列表管理
 
 ```bash
 # 添加到自选
-python3 -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock --group 核心持仓
+python scripts/tracker.py watchlist add --code 600519 --name 贵州茅台 --type stock --group 核心持仓
 
 # 移除
-python3 -m skills.market_tracker.tracker watchlist remove --code 600519
+python scripts/tracker.py watchlist remove --code 600519
 
 # 查看全部
-python3 -m skills.market_tracker.tracker watchlist list
+python scripts/tracker.py watchlist list
 
 # 按组/类型过滤
-python3 -m skills.market_tracker.tracker watchlist list --group 核心持仓
-python3 -m skills.market_tracker.tracker watchlist list --type futures
+python scripts/tracker.py watchlist list --group 核心持仓
+python scripts/tracker.py watchlist list --type futures
 ```
 
 ### 2. 单标的分析
 
 ```bash
 # 文本格式报告
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock
+python scripts/tracker.py analyze --code 600519 --type stock
 
 # JSON 格式
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --format json
+python scripts/tracker.py analyze --code 600519 --type stock --format json
 
 # 周线分析
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --period weekly
+python scripts/tracker.py analyze --code 600519 --type stock --period weekly
 
 # 离线测试模式
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --test
+python scripts/tracker.py analyze --code 600519 --type stock --test
 
 # 自定义指标参数
-python3 -m skills.market_tracker.tracker analyze --code 600519 --type stock --rsi-period 7 --macd-fast 10
+python scripts/tracker.py analyze --code 600519 --type stock --rsi-period 7 --macd-fast 10
 ```
 
 ### 3. 全自选批量分析
 
 ```bash
-python3 -m skills.market_tracker.tracker analyze-all
-python3 -m skills.market_tracker.tracker analyze-all --format json
+python scripts/tracker.py analyze-all
+python scripts/tracker.py analyze-all --format json
 ```
 
 ### 4. 市场概览
 
 ```bash
-python3 -m skills.market_tracker.tracker overview
-python3 -m skills.market_tracker.tracker overview --format json
+python scripts/tracker.py overview
+python scripts/tracker.py overview --format json
 ```
 
 ### 5. 定时监控（含信号变化检测）
 
 ```bash
 # 每5分钟扫描一次（默认300秒）
-python3 -m skills.market_tracker.tracker monitor --interval 300
+python scripts/tracker.py monitor --interval 300
 ```
 
 > 自动对比上轮扫描结果，信号变化时高亮提醒（如"从持有变为买入"）。
@@ -153,13 +169,13 @@ python3 -m skills.market_tracker.tracker monitor --interval 300
 
 ```bash
 # 基于历史K线回测决策信号
-python3 -m skills.market_tracker.tracker backtest --code 600519 --type stock
+python scripts/tracker.py backtest --code 600519 --type stock
 
 # 使用测试数据回测
-python3 -m skills.market_tracker.tracker backtest --code 600519 --type stock --test
+python scripts/tracker.py backtest --code 600519 --type stock --test
 
 # JSON 输出
-python3 -m skills.market_tracker.tracker backtest --code 600519 --type stock --format json
+python scripts/tracker.py backtest --code 600519 --type stock --format json
 ```
 
 回测采用固定仓位模型（信号买入 → 下一日开盘价成交），输出指标：
@@ -173,16 +189,16 @@ python3 -m skills.market_tracker.tracker backtest --code 600519 --type stock --f
 
 ```bash
 # 查看所有标的的决策记录（默认最近20条）
-python3 -m skills.market_tracker.tracker history
+python scripts/tracker.py history
 
 # 按标的过滤
-python3 -m skills.market_tracker.tracker history --code 600519
+python scripts/tracker.py history --code 600519
 
 # 指定条数
-python3 -m skills.market_tracker.tracker history --code 600519 --limit 50
+python scripts/tracker.py history --code 600519 --limit 50
 
 # JSON 输出
-python3 -m skills.market_tracker.tracker history --format json
+python scripts/tracker.py history --format json
 ```
 
 > 每次 `analyze` 执行（非测试模式）会自动将决策结果（操作/得分/价格/止损/止盈）记录到 SQLite。
@@ -191,16 +207,16 @@ python3 -m skills.market_tracker.tracker history --format json
 
 ```bash
 # 导出K线 + 全部技术指标到 CSV
-python3 -m skills.market_tracker.tracker export --code 600519 --type stock
+python scripts/tracker.py export --code 600519 --type stock
 
 # 指定输出文件
-python3 -m skills.market_tracker.tracker export --code 600519 --type stock --output my_data.csv
+python scripts/tracker.py export --code 600519 --type stock --output my_data.csv
 
 # 导出周线数据
-python3 -m skills.market_tracker.tracker export --code 600519 --type stock --period weekly
+python scripts/tracker.py export --code 600519 --type stock --period weekly
 
 # 导出测试数据
-python3 -m skills.market_tracker.tracker export --code 600519 --type stock --test
+python scripts/tracker.py export --code 600519 --type stock --test
 ```
 
 > 默认文件名: `{code}_{period}.csv`，包含 OHLCV + 所有技术指标列。
@@ -209,13 +225,13 @@ python3 -m skills.market_tracker.tracker export --code 600519 --type stock --tes
 
 ```bash
 # 仅技术分析
-python3 -m skills.market_tracker.tracker full-report --code 600519 --type stock
+python scripts/tracker.py full-report --code 600519 --type stock
 
 # 结合 finance_news 资讯分析
-python3 -m skills.market_tracker.tracker full-report --code 600519 --type stock --news-file news.json
+python scripts/tracker.py full-report --code 600519 --type stock --news-file news.json
 
 # JSON 输出
-python3 -m skills.market_tracker.tracker full-report --code 600519 --type stock --news-file news.json --format json
+python scripts/tracker.py full-report --code 600519 --type stock --news-file news.json --format json
 ```
 
 综合报告包含：

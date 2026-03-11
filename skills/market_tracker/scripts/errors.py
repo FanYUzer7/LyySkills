@@ -3,6 +3,10 @@
 定义错误码和用户友好的错误消息
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 
 class MarketTrackerError:
     """统一错误结构"""

@@ -1,22 +1,44 @@
 """
 市场跟踪器 - 数据获取层
 统一封装 AKShare，提供实时行情与历史K线获取，配合 db.py 做增量缓存
+
+支持独立运行:
+    python scripts/data_fetcher.py --code 600519 --type stock
+    python scripts/data_fetcher.py --code 600519 --type stock --period daily
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import warnings
+warnings.filterwarnings('ignore', message='pkg_resources is deprecated')
 
 import akshare as ak
 import pandas as pd
 from datetime import datetime, timedelta
 
-from .config import DEFAULT_HISTORY_DAYS, DAILY_ONLY_ASSET_TYPES
-from .db import MarketDB
-from .errors import MarketTrackerError as MTE
+import config
+import db
+from errors import MarketTrackerError as MTE
+
+DEFAULT_HISTORY_DAYS = config.DEFAULT_HISTORY_DAYS
+DAILY_ONLY_ASSET_TYPES = config.DAILY_ONLY_ASSET_TYPES
+
+
+def _get_db():
+    """获取数据库实例"""
+    return db.MarketDB()
 
 
 class MarketDataFetcher:
     """统一市场数据获取接口，封装 AKShare 各品种 API"""
 
-    def __init__(self, db: MarketDB = None):
-        self.db = db or MarketDB()
+    def __init__(self, db_instance=None):
+        if db_instance:
+            self.db = db_instance
+        else:
+            self.db = db.MarketDB()
 
     # ==========================================================
     # 实时行情
@@ -354,3 +376,71 @@ def _fmt_date_dash(date_str: str) -> str:
     if len(s) == 8:
         return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
     return date_str
+
+
+# ==========================================================
+# CLI 入口（独立运行）
+# ==========================================================
+def _parse_args(argv: list[str]) -> dict:
+    """解析命令行参数"""
+    args = {}
+    i = 0
+    while i < len(argv):
+        if argv[i].startswith("--"):
+            key = argv[i][2:]
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                args[key] = argv[i + 1]
+                i += 2
+            else:
+                args[key] = True
+                i += 1
+        else:
+            i += 1
+    return args
+
+
+def main():
+    args = _parse_args(sys.argv[1:])
+    code = args.get("code", "")
+    asset_type = args.get("type", "stock")
+    period = args.get("period", "daily")
+    output_format = args.get("format", "json")
+
+    if not code:
+        print("Usage: python data_fetcher.py --code CODE --type TYPE [--period daily|weekly|monthly] [--format json|text]", file=sys.stderr)
+        sys.exit(1)
+
+    fetcher = MarketDataFetcher()
+
+    # 获取实时行情
+    quote = fetcher.get_realtime_quote(code, asset_type)
+    if not quote:
+        print(f"Error: 无法获取 {code} 的行情数据", file=sys.stderr)
+        sys.exit(1)
+
+    # 获取历史K线
+    kline = fetcher.get_history_kline(code, asset_type, period=period)
+    if kline is None:
+        print(f"Error: 无法获取 {code} 的K线数据", file=sys.stderr)
+        sys.exit(1)
+
+    result = {
+        "code": code,
+        "asset_type": asset_type,
+        "period": period,
+        "quote": quote,
+        "kline_rows": len(kline),
+        "kline_columns": list(kline.columns),
+    }
+
+    if output_format == "json":
+        import json
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"标的: {quote.get('name', code)} ({code}) [{asset_type}]")
+        print(f"当前价: {quote.get('price', 'N/A')}  涨跌: {quote.get('change_pct', 'N/A')}%")
+        print(f"K线: {len(kline)} 行, 周期: {period}")
+
+
+if __name__ == "__main__":
+    main()

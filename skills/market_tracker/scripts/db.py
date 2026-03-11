@@ -1,15 +1,24 @@
 """
 市场跟踪器 - SQLite 数据库管理
 封装 sqlite3 + pandas 交互，管理历史K线数据的存储与增量更新
+
+支持独立运行:
+    python scripts/db.py --code 600519 --period daily
+    python scripts/db.py --code 600519 --period daily --limit 100
 """
 
-import sqlite3
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sqlite3
 from datetime import datetime
 
 import pandas as pd
 
-from .config import DB_PATH
+import config
+
+DB_PATH = config.DB_PATH
 
 
 class MarketDB:
@@ -227,3 +236,53 @@ def _insert_or_replace(table, conn, keys, data_iter):
     sql = f"INSERT OR REPLACE INTO {table.name} ({cols}) VALUES ({placeholders})"
     data = list(data_iter)
     conn.executemany(sql, data)
+
+
+# ==========================================================
+# CLI 入口（独立运行）
+# ==========================================================
+def _parse_args(argv: list[str]) -> dict:
+    args = {}
+    i = 0
+    while i < len(argv):
+        if argv[i].startswith("--"):
+            key = argv[i][2:]
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                args[key] = argv[i + 1]
+                i += 2
+            else:
+                args[key] = True
+                i += 1
+        else:
+            i += 1
+    return args
+
+
+def main():
+    args = _parse_args(sys.argv[1:])
+    code = args.get("code", "")
+    start_date = args.get("start")
+    end_date = args.get("end")
+    output_format = args.get("format", "text")
+
+    if not code:
+        print("Usage: python scripts/db.py --code CODE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--format json|text]", file=sys.stderr)
+        sys.exit(1)
+
+    db = MarketDB()
+    df = db.load_kline(code, start_date=start_date, end_date=end_date)
+
+    if df is None or df.empty:
+        print(f"No data found for {code}", file=sys.stderr)
+        sys.exit(1)
+
+    if output_format == "json":
+        import json
+        print(json.dumps(df.to_dict(orient="records"), ensure_ascii=False, indent=2))
+    else:
+        print(f"K线数据: {code} - {len(df)} 行")
+        print(df.tail(20).to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

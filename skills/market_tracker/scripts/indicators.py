@@ -4,6 +4,10 @@
 参考 knowledge.md 中的指标体系
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import numpy as np
 import pandas as pd
 
@@ -264,8 +268,8 @@ def compute_all_indicators(df: pd.DataFrame, params: dict = None
     df 需包含: close, high, low, volume 列。
     返回 dict，key 为指标名，value 为 Series 或 tuple。
     """
-    from .config import INDICATOR_PARAMS
-    p = params or INDICATOR_PARAMS
+    import config as _config
+    p = params or _config.INDICATOR_PARAMS
 
     close = df["close"].astype(float)
     high = df["high"].astype(float)

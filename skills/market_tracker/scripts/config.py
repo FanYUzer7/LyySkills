@@ -8,7 +8,8 @@ import os
 # ============================================================
 # 路径常量
 # ============================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR)  # market_tracker/
 DB_PATH = os.path.join(BASE_DIR, "market_data.db")
 WATCHLIST_PATH = os.path.join(BASE_DIR, "watchlist.json")
 TEST_DATA_DIR = os.path.join(BASE_DIR, "test_data")

@@ -4,12 +4,19 @@
 简单固定仓位模型：信号买入 → 下一日开盘价成交
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import numpy as np
 import pandas as pd
 from datetime import datetime
 
-from .decision_engine import InvestmentDecision
-from .config import DECISION_THRESHOLDS
+import decision_engine
+import config
+
+InvestmentDecision = decision_engine.InvestmentDecision
+DECISION_THRESHOLDS = config.DECISION_THRESHOLDS
 
 
 class BacktestEngine:

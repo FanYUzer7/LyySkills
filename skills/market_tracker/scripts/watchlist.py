@@ -1,14 +1,24 @@
 """
 市场跟踪器 - 自选列表管理
 支持添加/删除/查询/分组，JSON 持久化
+
+支持独立运行:
+    python scripts/watchlist.py add --code 600519 --name 茅台 --type stock
+    python scripts/watchlist.py list
 """
 
-import json
-import os
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import json
 from datetime import datetime
 
-from .config import ASSET_TYPES, ASSET_TYPE_NAMES, WATCHLIST_PATH
+import config
+
+ASSET_TYPES = config.ASSET_TYPES
+ASSET_TYPE_NAMES = config.ASSET_TYPE_NAMES
+WATCHLIST_PATH = config.WATCHLIST_PATH
 
 
 class Watchlist:
