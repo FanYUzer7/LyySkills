@@ -7,7 +7,7 @@ import akshare as ak
 import pandas as pd
 from datetime import datetime, timedelta
 
-from .config import DEFAULT_HISTORY_DAYS
+from .config import DEFAULT_HISTORY_DAYS, DAILY_ONLY_ASSET_TYPES
 from .db import MarketDB
 from .errors import MarketTrackerError as MTE
 
@@ -148,6 +148,10 @@ class MarketDataFetcher:
         获取历史K线。优先从 SQLite 缓存读取，不足部分从 AKShare 增量拉取。
         返回 DataFrame: date, open, high, low, close, volume, turnover
         """
+        # 期货/黄金仅支持日线
+        if asset_type in DAILY_ONLY_ASSET_TYPES and period != "daily":
+            period = "daily"
+
         today = datetime.now().strftime("%Y%m%d")
         if end_date is None:
             end_date = today
@@ -158,15 +162,18 @@ class MarketDataFetcher:
         start_date = start_date.replace("-", "")
         end_date = end_date.replace("-", "")
 
+        # 缓存键：非日线周期加后缀，避免覆盖日线数据
+        cache_key = f"{code}:{period}" if period != "daily" else code
+
         # 尝试从缓存获取
         if use_cache:
-            cached_latest = self.db.get_latest_date(code)
+            cached_latest = self.db.get_latest_date(cache_key)
             if cached_latest:
                 cached_latest_clean = cached_latest.replace("-", "")
                 if cached_latest_clean >= end_date:
                     # 缓存已覆盖请求范围
                     return self.db.load_kline(
-                        code,
+                        cache_key,
                         start_date=_fmt_date_dash(start_date),
                         end_date=_fmt_date_dash(end_date))
                 else:
@@ -179,18 +186,18 @@ class MarketDataFetcher:
                         code, asset_type, period,
                         incremental_start, end_date)
                     if new_df is not None and not new_df.empty:
-                        self.db.save_kline(code, new_df, asset_type)
+                        self.db.save_kline(cache_key, new_df, asset_type)
                     return self.db.load_kline(
-                        code,
+                        cache_key,
                         start_date=_fmt_date_dash(start_date),
                         end_date=_fmt_date_dash(end_date))
 
         # 无缓存，全量拉取
         df = self._fetch_kline(code, asset_type, period, start_date, end_date)
         if df is not None and not df.empty:
-            self.db.save_kline(code, df, asset_type)
+            self.db.save_kline(cache_key, df, asset_type)
         return self.db.load_kline(
-            code,
+            cache_key,
             start_date=_fmt_date_dash(start_date),
             end_date=_fmt_date_dash(end_date))
 
@@ -222,12 +229,9 @@ class MarketDataFetcher:
         return _normalize_kline_df(df)
 
     def _fetch_index_kline(self, code, period, start_date, end_date):
-        # 指数代码需要加市场前缀
-        prefix = "sh" if code.startswith(("000", "950", "880")) else "sz"
-        symbol = f"{prefix}{code}"
-        df = ak.stock_zh_index_daily_em(symbol=symbol,
-                                         start_date=start_date,
-                                         end_date=end_date)
+        df = ak.index_zh_a_hist(symbol=code, period=period,
+                                start_date=start_date,
+                                end_date=end_date)
         return _normalize_kline_df(df)
 
     def _fetch_etf_kline(self, code, period, start_date, end_date):

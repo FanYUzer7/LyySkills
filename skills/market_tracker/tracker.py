@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 from .config import (
     ASSET_TYPE_NAMES, DEFAULT_MONITOR_INTERVAL, TEST_DATA_DIR,
+    VALID_PERIODS, PERIOD_NAMES, DAILY_ONLY_ASSET_TYPES,
 )
 from .db import MarketDB
 from .watchlist import Watchlist
@@ -36,23 +37,25 @@ class MarketTracker:
     # ==========================================================
     def analyze(self, code: str, asset_type: str,
                 output_format: str = "text",
-                test_mode: bool = False) -> str | dict:
+                test_mode: bool = False,
+                period: str = "daily") -> str | dict:
         """
         对单个标的执行完整分析。
         :param code: 资产代码
         :param asset_type: stock/index/etf/futures/gold
         :param output_format: "text" 或 "json"
         :param test_mode: 使用本地测试数据，跳过网络请求
+        :param period: K线周期 daily/weekly/monthly
         :return: 格式化报告或 dict
         """
         if test_mode:
-            return self._analyze_from_test_data(code, asset_type, output_format)
+            return self._analyze_from_test_data(code, asset_type, output_format, period)
 
         # 1. 获取实时行情
         quote = self.fetcher.get_realtime_quote(code, asset_type)
 
         # 2. 获取历史K线 (自动增量缓存)
-        df = self.fetcher.get_history_kline(code, asset_type)
+        df = self.fetcher.get_history_kline(code, asset_type, period=period)
 
         # 3. 决策分析
         result = self.engine.analyze(df, quote)
@@ -65,10 +68,11 @@ class MarketTracker:
         if output_format == "json":
             return _serialize(result)
 
-        return self._format_report(code, asset_type, result)
+        return self._format_report(code, asset_type, result, period)
 
     def _analyze_from_test_data(self, code: str, asset_type: str,
-                                output_format: str) -> str | dict:
+                                output_format: str,
+                                period: str = "daily") -> str | dict:
         """离线测试模式：从 test_data/ 加载数据进行分析"""
         import os
         import pandas as pd
@@ -112,8 +116,9 @@ class MarketTracker:
         if output_format == "json":
             return _serialize(result)
 
-        report = self._format_report(code, asset_type, result)
-        return f"🧪 [离线测试模式] 数据来源: {os.path.basename(data_path)}\n\n{report}"
+        report = self._format_report(code, asset_type, result, period)
+        period_label = PERIOD_NAMES.get(period, period)
+        return f"🧪 [离线测试模式] 数据来源: {os.path.basename(data_path)} | 周期: {period_label}\n\n{report}"
 
     # ==========================================================
     # 全自选分析
@@ -152,7 +157,8 @@ class MarketTracker:
     # ==========================================================
     def backtest(self, code: str, asset_type: str,
                  output_format: str = "text",
-                 test_mode: bool = False) -> str | dict:
+                 test_mode: bool = False,
+                 period: str = "daily") -> str | dict:
         """对单个标的执行策略回测"""
         import os
         import pandas as pd
@@ -170,7 +176,7 @@ class MarketTracker:
             if "amount" in df.columns and "turnover" not in df.columns:
                 df["turnover"] = df["amount"]
         else:
-            df = self.fetcher.get_history_kline(code, asset_type)
+            df = self.fetcher.get_history_kline(code, asset_type, period=period)
 
         if df is None or df.empty:
             msg = "无法获取历史数据"
@@ -209,12 +215,13 @@ class MarketTracker:
     # 格式化
     # ==========================================================
     def _format_report(self, code: str, asset_type: str,
-                       result: dict) -> str:
+                       result: dict, period: str = "daily") -> str:
         """格式化分析报告"""
         now = datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S")
         quote = result.get("quote") or {}
         name = quote.get("name", code)
         type_name = ASSET_TYPE_NAMES.get(asset_type, asset_type)
+        period_name = PERIOD_NAMES.get(period, period)
 
         lines = []
         sep = "=" * 60
@@ -222,6 +229,7 @@ class MarketTracker:
         lines.append(f"📊 投资决策分析报告")
         lines.append(f"📅 {now} CST")
         lines.append(f"🎯 标的: {name} ({code}) [{type_name}]")
+        lines.append(f"📈 K线周期: {period_name}")
         lines.append(sep)
 
         # 实时行情
@@ -446,10 +454,17 @@ def main():
         code = args.get("code", "")
         asset_type = args.get("type", "stock")
         test_mode = args.get("test", False)
+        period = args.get("period", "daily")
         if not code:
             print("错误: --code 为必填")
             sys.exit(1)
-        result = tracker.analyze(code, asset_type, fmt, test_mode=test_mode)
+        if period not in VALID_PERIODS:
+            print(f"错误: --period 仅支持 {', '.join(VALID_PERIODS)}")
+            sys.exit(1)
+        if period != "daily" and asset_type in DAILY_ONLY_ASSET_TYPES:
+            print(f"提示: {ASSET_TYPE_NAMES.get(asset_type, asset_type)}仅支持日线，已自动切换为 daily")
+            period = "daily"
+        result = tracker.analyze(code, asset_type, fmt, test_mode=test_mode, period=period)
         if fmt == "json":
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -477,10 +492,17 @@ def main():
         code = args.get("code", "")
         asset_type = args.get("type", "stock")
         test_mode = args.get("test", False)
+        period = args.get("period", "daily")
         if not code:
             print("错误: --code 为必填")
             sys.exit(1)
-        result = tracker.backtest(code, asset_type, fmt, test_mode=test_mode)
+        if period not in VALID_PERIODS:
+            print(f"错误: --period 仅支持 {', '.join(VALID_PERIODS)}")
+            sys.exit(1)
+        if period != "daily" and asset_type in DAILY_ONLY_ASSET_TYPES:
+            print(f"提示: {ASSET_TYPE_NAMES.get(asset_type, asset_type)}仅支持日线，已自动切换为 daily")
+            period = "daily"
+        result = tracker.backtest(code, asset_type, fmt, test_mode=test_mode, period=period)
         if fmt == "json":
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -540,11 +562,11 @@ def _print_usage():
   watchlist remove --code CODE
   watchlist list   [--group GROUP] [--type TYPE]
 
-  analyze     --code CODE --type TYPE [--format json] [--test]
+  analyze     --code CODE --type TYPE [--period PERIOD] [--format json] [--test]
   analyze-all [--format json]
   overview    [--format json]
   monitor     [--interval SECONDS]
-  backtest    --code CODE --type TYPE [--format json] [--test]
+  backtest    --code CODE --type TYPE [--period PERIOD] [--format json] [--test]
 
 资产类型 (--type):
   stock    A股个股
@@ -553,9 +575,16 @@ def _print_usage():
   futures  期货
   gold     黄金/贵金属
 
+K线周期 (--period):
+  daily    日线（默认）
+  weekly   周线
+  monthly  月线
+  注: 期货/黄金仅支持日线
+
 示例:
   python -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock
   python -m skills.market_tracker.tracker analyze --code 600519 --type stock
+  python -m skills.market_tracker.tracker analyze --code 600519 --type stock --period weekly
   python -m skills.market_tracker.tracker overview
   python -m skills.market_tracker.tracker backtest --code 600519 --type stock --test
   python -m skills.market_tracker.tracker monitor --interval 300
