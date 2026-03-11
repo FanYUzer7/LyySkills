@@ -1,3 +1,7 @@
+---
+description: "实时获取和分析中国金融市场资讯（A股、期货、黄金），生成市场情绪、板块表现分析报告"
+---
+
 # 金融市场资讯分析 Skill
 
 ## 功能概述
@@ -60,15 +64,21 @@
 
 ### Step 3: 调用分析器
 
-将搜索结果传递给分析脚本进行分析：
+将搜索结果传递给分析脚本进行分析。分析器位于本 skill 目录下的 `analyzer.py`：
 
 ```bash
 # 方法1: 通过stdin传递JSON数据
-echo '{"organic": [...]}' | ~/miniconda3/envs/py311/bin/python /home/youya/workspace/MySkills/skills/finance_news/analyzer.py
+echo '{"organic": [...]}' | python3 <SKILL_DIR>/analyzer.py
 
 # 方法2: 通过文件传递
-# 先将JSON保存到临时文件，然后调用分析器
+python3 <SKILL_DIR>/analyzer.py --file /path/to/search_results.json
+
+# 方法3: 输出结构化JSON格式（便于链式调用）
+echo '{"organic": [...]}' | python3 <SKILL_DIR>/analyzer.py --format json
 ```
+
+> **注意**：`<SKILL_DIR>` 表示本 skill 所在的绝对路径。Agent 应在运行时动态解析此路径。
+> 分析器仅依赖 Python 标准库，无需额外安装任何依赖。
 
 ### Step 4: 输出报告
 
@@ -138,10 +148,18 @@ echo '{"organic": [...]}' | ~/miniconda3/envs/py311/bin/python /home/youya/works
 
 ```
 skills/finance_news/
-├── skill.md          # Skill定义文件
-├── analyzer.py       # 资讯分析器
-└── finance_news.py   # 主程序（辅助工具）
+├── SKILL.md            # Skill定义文件（本文件）
+├── analyzer.py         # 资讯分析器（核心）
+├── config.py           # 搜索关键词配置
+├── requirements.txt    # 依赖声明（仅stdlib）
+└── test_data.json      # 测试数据
 ```
+
+## 依赖要求
+
+- Python 3.9+
+- 仅使用标准库，无第三方依赖
+- minimax MCP（用于网络搜索，Agent层面调用）
 
 ## 注意事项
 

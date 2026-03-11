@@ -6,8 +6,11 @@
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
+
+# 中国标准时间 UTC+8
+CST = timezone(timedelta(hours=8))
 
 
 class FinancialNewsAnalyzer:
@@ -27,32 +30,32 @@ class FinancialNewsAnalyzer:
                 self.news_data = data
             else:
                 self.news_data = [data]
-        except json.JSONDecodeError:
-            # 如果是字符串列表
-            if isinstance(news_json, str) and news_json.startswith('['):
-                self.news_data = json.loads(news_json)
-            else:
-                self.news_data = []
+        except (json.JSONDecodeError, TypeError):
+            self.news_data = []
 
     def analyze_market_sentiment(self) -> Dict[str, Any]:
         """分析市场情绪"""
         if not self.news_data:
             return {"sentiment": "unknown", "confidence": 0, "details": []}
 
-        # 积极关键词：价格涨跌 + 业绩增长 + 政策支持 + 回购
-        positive_keywords = [
-            '涨', '大涨', '反弹', '上涨', '普涨', '回暖', '涨幅', '收涨', '飙升', '创新高',
-            '增长', '同比增长', '净利润增长', '业绩增长', '扭亏', '盈利',
-            '支持', '利好', '发展', '改革', '创新',
-            '回购', '增持', '定增', '并购', '重组',
-            '申购', '发行', '上市'
-        ]
-        # 消极关键词
-        negative_keywords = [
-            '跌', '大跌', '下跌', '回调', '走弱', '跌幅', '收跌', '暴跌', '创新低',
-            '减少', '下降', '下滑', '亏损', '减持', '解禁',
-            '风险', '利空', '制裁', '冲突', '战争'
-        ]
+        # 积极关键词，带权重：强烈词汇权重更高
+        positive_keywords = {
+            '暴涨': 3, '飙升': 3, '创新高': 3,
+            '大涨': 2, '普涨': 2, '强势': 2,
+            '涨': 1, '反弹': 1, '上涨': 1, '回暖': 1, '涨幅': 1, '收涨': 1,
+            '增长': 1, '同比增长': 1, '净利润增长': 1, '业绩增长': 1, '扭亏': 1, '盈利': 1,
+            '支持': 1, '利好': 2, '发展': 1, '改革': 1, '创新': 1,
+            '回购': 1, '增持': 1, '定增': 1, '并购': 1, '重组': 1,
+            '申购': 1, '发行': 1, '上市': 1,
+        }
+        # 消极关键词，带权重
+        negative_keywords = {
+            '暴跌': 3, '崩盘': 3, '创新低': 3,
+            '大跌': 2, '跌停': 2, '重挫': 2,
+            '跌': 1, '下跌': 1, '回调': 1, '走弱': 1, '跌幅': 1, '收跌': 1,
+            '减少': 1, '下降': 1, '下滑': 1, '亏损': 2, '减持': 1, '解禁': 1,
+            '风险': 1, '利空': 2, '制裁': 2, '冲突': 1, '战争': 2,
+        }
 
         positive_count = 0
         negative_count = 0
@@ -65,8 +68,8 @@ class FinancialNewsAnalyzer:
             snippet = news.get('snippet', '')
             text = title + ' ' + snippet
 
-            pos = sum(1 for kw in positive_keywords if kw in text)
-            neg = sum(1 for kw in negative_keywords if kw in text)
+            pos = sum(w for kw, w in positive_keywords.items() if kw in text)
+            neg = sum(w for kw, w in negative_keywords.items() if kw in text)
 
             if pos > neg:
                 positive_count += 1
@@ -93,7 +96,8 @@ class FinancialNewsAnalyzer:
             confidence = negative_count / total
         else:
             sentiment = "震荡"
-            confidence = max(positive_count, negative_count) / total if total > 0 else 0
+            # 震荡置信度反映多空均衡程度
+            confidence = (1 - abs(positive_count - negative_count) / total) if total > 0 else 0
 
         return {
             "sentiment": sentiment,
@@ -111,10 +115,15 @@ class FinancialNewsAnalyzer:
         # 定义关键事件模式
         event_patterns = {
             '原油波动': ['原油', '油价', '石油', 'WTI', '布伦特'],
-            '科技股反弹': ['科技', '半导体', 'AI', '算力', '创业板', '科创'],
-            '周期股回调': ['煤炭', '油气', '化工', '周期'],
-            '政策影响': ['宏观', '政策', '央行', '美联储'],
-            '地缘政治': ['伊朗', '中东', '地缘', '冲突', '战争'],
+            '科技股异动': ['科技', '半导体', 'AI', '算力', '创业板', '科创', '芯片'],
+            '周期股异动': ['煤炭', '油气', '化工', '周期', '有色', '钢铁'],
+            '政策影响': ['宏观', '政策', '央行', '美联储', '降准', '降息', 'LPR'],
+            '地缘政治': ['伊朗', '中东', '地缘', '冲突', '战争', '制裁'],
+            'IPO与新股': ['IPO', '新股', '申购', '上市首日'],
+            '外资动向': ['北向资金', '外资', '沪股通', '深股通', 'QFII'],
+            '美股联动': ['美股', '纳斯达克', '标普', '道琼斯', '美联储'],
+            '汇率波动': ['人民币', '汇率', '美元', '外汇'],
+            '行业监管': ['监管', '罚单', '整改', '合规', '反垄断'],
         }
 
         for news in self.news_data:
@@ -225,7 +234,7 @@ class FinancialNewsAnalyzer:
         report = []
         report.append("=" * 60)
         report.append(f"📊 金融市场资讯分析报告")
-        report.append(f"📅 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append(f"📅 生成时间: {datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S')}")
         report.append(f"📰 资讯来源: {len(self.news_data)} 条")
         report.append("=" * 60)
 
@@ -256,21 +265,30 @@ class FinancialNewsAnalyzer:
                 emoji = "⬆️" if data["sentiment"] == "偏多" else "⬇️" if data["sentiment"] == "偏空" else "➡️"
                 report.append(f"   {emoji} {sector}: {data['sentiment']} (提及{data['mentions']}次, 利好{data['positive']}次, 利空{data['negative']}次)")
 
-        # 分析总结
+        # 分析总结 — 基于实际板块数据动态生成
         report.append("\n💡 【分析总结】")
 
-        # 基于情绪和分析给出总结
+        # 找出表现最好和最差的板块
+        bullish_sectors = [s for s, d in sectors.items() if d.get('sentiment') == '偏多']
+        bearish_sectors = [s for s, d in sectors.items() if d.get('sentiment') == '偏空']
+
+        summary_parts = [f"   市场情绪{sentiment['sentiment']}"]
+        if bullish_sectors:
+            summary_parts.append(f"{'、'.join(bullish_sectors)}板块表现活跃")
+        if bearish_sectors:
+            summary_parts.append(f"{'、'.join(bearish_sectors)}板块承压")
+
         if sentiment['sentiment'] == "偏多":
-            report.append("   市场情绪偏多，科技成长板块表现活跃，")
-            if sectors.get('科技成长', {}).get('sentiment') == '偏多':
-                report.append("建议关注科技成长板块的机会。")
+            if bullish_sectors:
+                summary_parts.append(f"建议关注{'、'.join(bullish_sectors)}的机会")
+            else:
+                summary_parts.append("市场整体偏暖，可关注主线板块机会")
         elif sentiment['sentiment'] == "偏空":
-            report.append("   市场情绪偏空，周期股回调明显，")
-            if sectors.get('周期股', {}).get('sentiment') == '偏空':
-                report.append("注意风险回避。")
+            summary_parts.append("注意控制仓位，规避风险")
         else:
-            report.append("   市场呈现震荡格局，板块分化明显，")
-            report.append("建议关注业绩确定性和政策导向。")
+            summary_parts.append("板块分化明显，建议关注业绩确定性和政策导向")
+
+        report.append("，".join(summary_parts) + "。")
 
         # 风险提示
         report.append("\n⚠️ 【风险提示】")
@@ -284,26 +302,45 @@ class FinancialNewsAnalyzer:
 
 def main():
     """主函数"""
-    # 从命令行参数或stdin获取数据
-    if len(sys.argv) > 1:
-        # 从文件读取
-        if sys.argv[1] == '--file':
-            with open(sys.argv[2], 'r', encoding='utf-8') as f:
-                news_json = f.read()
-        else:
-            news_json = sys.argv[1]
+    import argparse
+
+    parser = argparse.ArgumentParser(description="金融市场资讯分析工具")
+    parser.add_argument('--file', '-f', type=str, help='从JSON文件读取新闻数据')
+    parser.add_argument('--format', choices=['text', 'json'], default='text',
+                        help='输出格式: text(默认) 或 json')
+    parser.add_argument('data', nargs='?', type=str, help='直接传入JSON字符串')
+    args = parser.parse_args()
+
+    news_json = None
+    if args.file:
+        with open(args.file, 'r', encoding='utf-8') as f:
+            news_json = f.read()
+    elif args.data:
+        news_json = args.data
     else:
         # 从stdin读取
-        news_json = sys.stdin.read()
+        if not sys.stdin.isatty():
+            news_json = sys.stdin.read()
 
-    if not news_json.strip():
-        print("Error: No news data provided", file=sys.stderr)
+    if not news_json or not news_json.strip():
+        print("Error: No news data provided. Use --file, positional arg, or pipe via stdin.", file=sys.stderr)
         sys.exit(1)
 
     analyzer = FinancialNewsAnalyzer()
     analyzer.load_news(news_json)
-    report = analyzer.generate_analysis_report()
-    print(report)
+
+    if args.format == 'json':
+        result = {
+            "sentiment": analyzer.analyze_market_sentiment(),
+            "events": analyzer.extract_key_events(),
+            "sectors": analyzer.analyze_sector_performance(),
+            "generated_at": datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S'),
+            "news_count": len(analyzer.news_data),
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        report = analyzer.generate_analysis_report()
+        print(report)
 
 
 if __name__ == "__main__":

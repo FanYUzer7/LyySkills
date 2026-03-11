@@ -22,16 +22,18 @@ This workspace contains custom skills for Claude Code, focused on financial mark
 
 2. 调用分析器分析搜索结果：
    ```bash
-   ~/miniconda3/envs/py311/bin/python /home/youya/workspace/MySkills/skills/finance_news/analyzer.py
+   echo '<JSON搜索结果>' | python3 skills/finance_news/analyzer.py
    ```
    - 输入：通过 stdin 传递 JSON 格式的搜索结果
-   - 输出：格式化市场分析报告
+   - 输出：格式化市场分析报告（文本或 JSON）
+   - 支持 `--format json` 输出结构化数据
+   - 支持 `--file <path>` 从文件读取
 
 ### 测试分析器
 
 ```bash
 # 使用测试数据测试分析器
-echo '{"organic": [...]}' | ~/miniconda3/envs/py311/bin/python /home/youya/workspace/MySkills/skills/finance_news/analyzer.py
+python3 skills/finance_news/analyzer.py --file skills/finance_news/test_data.json
 ```
 
 ## Project Structure
@@ -41,9 +43,11 @@ MySkills/
 ├── CLAUDE.md                    # 本文件
 └── skills/
     └── finance_news/
-        ├── skill.md              # Skill定义和使用说明
+        ├── SKILL.md              # Skill定义和使用说明
         ├── analyzer.py           # 资讯分析器（核心）
-        └── finance_news.py       # 辅助工具
+        ├── config.py             # 搜索关键词配置
+        ├── requirements.txt      # 依赖声明
+        └── test_data.json        # 测试数据
 ```
 
 ## Architecture
@@ -66,7 +70,7 @@ MySkills/
 
 ### 依赖
 
-- Python 3.11+ (推荐 py311 环境)
+- Python 3.9+（仅使用标准库，无第三方依赖）
 - minimax MCP (用于网络搜索)
 
 ## Skill: 金融市场资讯分析
