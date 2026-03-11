@@ -4,6 +4,10 @@
 供 Agent 或 analyzer.py 使用的关键词与辅助函数。
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from typing import Dict, List
 
 

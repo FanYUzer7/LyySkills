@@ -64,20 +64,19 @@ description: "实时获取和分析中国金融市场资讯（A股、期货、�
 
 ### Step 3: 调用分析器
 
-将搜索结果传递给分析脚本进行分析。分析器位于本 skill 目录下的 `analyzer.py`：
+将搜索结果传递给分析脚本进行分析。分析器位于 `scripts/analyzer.py`：
 
 ```bash
 # 方法1: 通过stdin传递JSON数据
-echo '{"organic": [...]}' | python3 <SKILL_DIR>/analyzer.py
+echo '{"organic": [...]}' | python scripts/analyzer.py
 
 # 方法2: 通过文件传递
-python3 <SKILL_DIR>/analyzer.py --file /path/to/search_results.json
+python scripts/analyzer.py --file /path/to/search_results.json
 
 # 方法3: 输出结构化JSON格式（便于链式调用）
-echo '{"organic": [...]}' | python3 <SKILL_DIR>/analyzer.py --format json
+echo '{"organic": [...]}' | python scripts/analyzer.py --format json
 ```
 
-> **注意**：`<SKILL_DIR>` 表示本 skill 所在的绝对路径。Agent 应在运行时动态解析此路径。
 > 分析器仅依赖 Python 标准库，无需额外安装任何依赖。
 
 ### Step 4: 输出报告

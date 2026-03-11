@@ -2,10 +2,17 @@
 """
 金融市场资讯分析工具
 用于分析中国金融市场的实时资讯，并提供带有事实依据的分析
+
+支持独立运行:
+    python scripts/analyzer.py --file news.json --format json
+    python scripts/analyzer.py --file news.json --format text
 """
 
-import json
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
