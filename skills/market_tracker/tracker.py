@@ -107,6 +107,10 @@ class MarketTracker:
         # 提取内部标记后再序列化
         test_data_path = result.pop("_test_data_path", None)
 
+        # 记录决策到 SQLite（非测试模式）
+        if not test_mode:
+            self._record_decision(code, asset_type, result, period)
+
         if output_format == "json":
             return _serialize(result)
 
@@ -115,6 +119,63 @@ class MarketTracker:
             period_label = PERIOD_NAMES.get(period, period)
             report = f"🧪 [离线测试模式] 数据来源: {test_data_path} | 周期: {period_label}\n\n{report}"
         return report
+
+    def _record_decision(self, code: str, asset_type: str,
+                         result: dict, period: str = "daily"):
+        """将分析决策记录到 SQLite"""
+        try:
+            action_info = result.get("action", {})
+            quote = result.get("quote") or {}
+            self.db.save_decision(
+                code=code,
+                asset_type=asset_type,
+                timestamp=datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S"),
+                action=action_info.get("action", ""),
+                score=result.get("final_score", 0),
+                price=quote.get("price", 0),
+                stop_loss=result.get("stop_loss", 0),
+                take_profit=result.get("take_profit", 0),
+                period=period,
+            )
+        except Exception:
+            pass  # 决策记录失败不影响主流程
+
+    # ==========================================================
+    # 决策历史查询
+    # ==========================================================
+    def history(self, code: str = None, limit: int = 20,
+                output_format: str = "text") -> str | list:
+        """查询决策历史"""
+        df = self.db.load_decisions(code=code, limit=limit)
+
+        if df.empty:
+            msg = f"暂无{'该标的' if code else ''}决策记录"
+            return {"records": [], "message": msg} if output_format == "json" else f"📋 {msg}"
+
+        if output_format == "json":
+            return df.to_dict(orient="records")
+
+        return self._format_history(df, code)
+
+    def _format_history(self, df, code: str = None) -> str:
+        """格式化决策历史表格"""
+        lines = []
+        sep = "=" * 70
+        lines.append(sep)
+        title = f"📜 决策历史记录" + (f" — {code}" if code else " — 全部标的")
+        lines.append(title)
+        lines.append(f"📋 共 {len(df)} 条记录")
+        lines.append(sep)
+        lines.append(f"  {'时间':<20} {'代码':<8} {'操作':<10} {'得分':>6} {'价格':>10} {'止损':>10} {'止盈':>10}")
+        lines.append(f"  {'─'*20} {'─'*8} {'─'*10} {'─'*6} {'─'*10} {'─'*10} {'─'*10}")
+        for _, row in df.iterrows():
+            lines.append(
+                f"  {row['timestamp']:<20} {row['code']:<8} {row['action']:<10} "
+                f"{row['score']:>+6.2f} {_fmt_num(row['price']):>10} "
+                f"{_fmt_num(row['stop_loss']):>10} {_fmt_num(row['take_profit']):>10}"
+            )
+        lines.append(sep)
+        return "\n".join(lines)
 
     # ==========================================================
     # 全自选分析
@@ -561,6 +622,15 @@ def main():
         else:
             print(result)
 
+    elif cmd == "history":
+        code = args.get("code", None)
+        limit = int(args.get("limit", 20))
+        result = tracker.history(code=code, limit=limit, output_format=fmt)
+        if fmt == "json":
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(result)
+
     else:
         print(f"未知命令: {cmd}")
         _print_usage()
@@ -620,6 +690,7 @@ def _print_usage():
   overview    [--format json]
   monitor     [--interval SECONDS]
   backtest    --code CODE --type TYPE [--period PERIOD] [--format json] [--test]
+  history     [--code CODE] [--limit N] [--format json]
 
 资产类型 (--type):
   stock    A股个股

@@ -55,6 +55,24 @@ class MarketDB:
                     latest_date   TEXT
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS decisions (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    code       TEXT    NOT NULL,
+                    asset_type TEXT,
+                    timestamp  TEXT    NOT NULL,
+                    action     TEXT,
+                    score      REAL,
+                    price      REAL,
+                    stop_loss  REAL,
+                    take_profit REAL,
+                    period     TEXT DEFAULT 'daily'
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_decisions_code_ts
+                ON decisions (code, timestamp)
+            """)
             conn.commit()
 
     # ----------------------------------------------------------
@@ -163,6 +181,37 @@ class MarketDB:
         """列出所有已缓存的标的"""
         with self._get_conn() as conn:
             return pd.read_sql("SELECT * FROM kline_meta ORDER BY code", conn)
+
+    # ----------------------------------------------------------
+    # 决策追踪
+    # ----------------------------------------------------------
+    def save_decision(self, code: str, asset_type: str, timestamp: str,
+                      action: str, score: float, price: float,
+                      stop_loss: float = 0, take_profit: float = 0,
+                      period: str = "daily"):
+        """记录一次分析决策"""
+        with self._get_conn() as conn:
+            conn.execute("""
+                INSERT INTO decisions
+                (code, asset_type, timestamp, action, score, price,
+                 stop_loss, take_profit, period)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (code, asset_type, timestamp, action, score, price,
+                  stop_loss, take_profit, period))
+            conn.commit()
+
+    def load_decisions(self, code: str = None,
+                       limit: int = 50) -> pd.DataFrame:
+        """查询决策历史"""
+        query = "SELECT * FROM decisions"
+        params: list = []
+        if code:
+            query += " WHERE code = ?"
+            params.append(code)
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+        with self._get_conn() as conn:
+            return pd.read_sql(query, conn, params=params)
 
     def __enter__(self):
         return self
