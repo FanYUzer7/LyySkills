@@ -257,6 +257,110 @@ class MarketTracker:
         return self._format_overview(data)
 
     # ==========================================================
+    # 综合报告 (技术分析 + 资讯情绪)
+    # ==========================================================
+    def full_report(self, code: str, asset_type: str,
+                    news_file: str = None,
+                    output_format: str = "text",
+                    test_mode: bool = False,
+                    period: str = "daily") -> str | dict:
+        """综合分析报告：技术面 + 资讯面"""
+        # 1. 技术分析
+        tech_result = self._analyze_raw(code, asset_type, test_mode, period)
+        tech_result.pop("_test_data_path", None)
+
+        # 2. 资讯分析（需要 finance_news skill）
+        news_result = None
+        if news_file:
+            try:
+                import os
+                sys.path.insert(0, os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                from finance_news.analyzer import FinancialNewsAnalyzer
+
+                with open(news_file, "r", encoding="utf-8") as f:
+                    news_json = f.read()
+                analyzer = FinancialNewsAnalyzer()
+                analyzer.load_news(news_json)
+                news_result = {
+                    "sentiment": analyzer.analyze_market_sentiment(),
+                    "events": analyzer.extract_key_events(),
+                    "sectors": analyzer.analyze_sector_performance(),
+                    "news_count": len(analyzer.news_data),
+                }
+            except Exception as e:
+                news_result = {"error": f"资讯分析失败: {e}"}
+
+        if output_format == "json":
+            return _serialize({
+                "technical": tech_result,
+                "news": news_result,
+            })
+
+        # 文本报告
+        lines = []
+        sep = "=" * 60
+
+        # 技术分析部分
+        if "error" not in tech_result:
+            lines.append(self._format_report(code, asset_type, tech_result, period))
+        else:
+            lines.append(format_error_for_display(tech_result))
+
+        # 资讯分析部分
+        if news_result and "error" not in news_result:
+            lines.append("")
+            lines.append(sep)
+            lines.append("📰 【资讯情绪分析】")
+            lines.append(sep)
+            sentiment = news_result.get("sentiment", {})
+            lines.append(f"   市场情绪: {sentiment.get('sentiment', '未知')} "
+                         f"(置信度: {sentiment.get('confidence', 0)}%)")
+            lines.append(f"   资讯数量: {news_result.get('news_count', 0)} 条")
+
+            events = news_result.get("events", [])
+            if events:
+                lines.append("")
+                lines.append("📌 【关键事件】")
+                for i, ev in enumerate(events[:5], 1):
+                    tag = ev.get("tag", "")
+                    title = ev.get("title", "")
+                    lines.append(f"   {i}. [{tag}] {title}")
+
+            sectors = news_result.get("sectors", {})
+            if sectors:
+                lines.append("")
+                lines.append("📈 【板块情绪】")
+                for name, info in sectors.items():
+                    if isinstance(info, dict):
+                        lines.append(f"   {name}: {info.get('sentiment', '中性')}")
+
+            # 综合判断
+            lines.append("")
+            lines.append("🔗 【技术面 + 消息面综合】")
+            if "error" not in tech_result:
+                tech_action = tech_result.get("action", {}).get("action", "")
+                news_sentiment = sentiment.get("sentiment", "")
+                if ("买入" in tech_action and news_sentiment == "偏多"):
+                    lines.append("   ✅ 技术面与消息面共振偏多，信号较强")
+                elif ("卖出" in tech_action and news_sentiment == "偏空"):
+                    lines.append("   ⚠️ 技术面与消息面共振偏空，注意风险")
+                elif "买入" in tech_action and news_sentiment == "偏空":
+                    lines.append("   ⚡ 技术面看多但消息面偏空，建议谨慎")
+                elif "卖出" in tech_action and news_sentiment == "偏多":
+                    lines.append("   ⚡ 技术面看空但消息面偏多，观望为主")
+                else:
+                    lines.append(f"   技术信号: {tech_action} | 消息情绪: {news_sentiment}")
+
+        elif news_result and "error" in news_result:
+            lines.append(f"\n⚠️ {news_result['error']}")
+
+        lines.append("")
+        lines.append("⚠️ 本综合报告基于技术指标和公开资讯，仅供参考，不构成投资建议。")
+        lines.append(sep)
+        return "\n".join(lines)
+
+    # ==========================================================
     # 策略回测
     # ==========================================================
     def backtest(self, code: str, asset_type: str,
@@ -729,6 +833,25 @@ def main():
         print(tracker.export(code, asset_type, period=period,
                              output_path=output_path, test_mode=test_mode))
 
+    elif cmd == "full-report":
+        code = args.get("code", "")
+        asset_type = args.get("type", "stock")
+        test_mode = args.get("test", False)
+        period = args.get("period", "daily")
+        news_file = args.get("news-file", None)
+        if not code:
+            print("错误: --code 为必填")
+            sys.exit(1)
+        result = tracker.full_report(code, asset_type,
+                                     news_file=news_file,
+                                     output_format=fmt,
+                                     test_mode=test_mode,
+                                     period=period)
+        if fmt == "json":
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(result)
+
     else:
         print(f"未知命令: {cmd}")
         _print_usage()
@@ -790,6 +913,7 @@ def _print_usage():
   backtest    --code CODE --type TYPE [--period PERIOD] [--format json] [--test]
   history     [--code CODE] [--limit N] [--format json]
   export      --code CODE --type TYPE [--period PERIOD] [--output FILE] [--test]
+  full-report --code CODE --type TYPE [--news-file FILE] [--format json] [--test]
 
 资产类型 (--type):
   stock    A股个股
