@@ -114,11 +114,15 @@ class TechnicalSignalGenerator:
 
     def _rsi_signal(self, ind_data: dict) -> dict:
         """RSI 超买超卖信号"""
-        rsi_14 = ind_data.get("rsi_14")
-        if rsi_14 is None or rsi_14.empty:
+        # 使用配置的RSI周期，默认14
+        rsi_periods = self.params.get("rsi_periods", [14])
+        # 优先使用14周期（行业标准），否则用配置的第一个
+        rsi_period = 14 if 14 in rsi_periods else rsi_periods[0]
+        rsi_val = ind_data.get(f"rsi_{rsi_period}")
+        if rsi_val is None or rsi_val.empty:
             return {"signal": 0, "confidence": 0, "detail": "数据不足"}
 
-        val = rsi_14.iloc[-1]
+        val = rsi_val.iloc[-1]
         if np.isnan(val):
             return {"signal": 0, "confidence": 0, "detail": "RSI 计算中"}
 
@@ -360,8 +364,8 @@ class FactorScorer:
 class InvestmentDecision:
     """综合 Layer1 + Layer2，输出最终投资决策"""
 
-    def __init__(self):
-        self.signal_gen = TechnicalSignalGenerator()
+    def __init__(self, indicator_params: dict = None):
+        self.signal_gen = TechnicalSignalGenerator(indicator_params)
         self.factor_scorer = FactorScorer()
 
     def analyze(self, df: pd.DataFrame, quote: dict = None) -> dict:

@@ -26,11 +26,11 @@ CST = timezone(timedelta(hours=8))
 class MarketTracker:
     """市场跟踪器主编排类"""
 
-    def __init__(self):
+    def __init__(self, indicator_params: dict = None):
         self.db = MarketDB()
         self.watchlist = Watchlist()
         self.fetcher = MarketDataFetcher(self.db)
-        self.engine = InvestmentDecision()
+        self.engine = InvestmentDecision(indicator_params)
         # 用于 monitor 信号变化检测：{code: {"action": str, "score": float}}
         self._prev_signals = {}
 
@@ -597,6 +597,43 @@ def _parse_args(argv: list[str]) -> dict:
     return result
 
 
+def _build_indicator_overrides(args: dict) -> dict | None:
+    """从 CLI 参数构建指标参数覆盖"""
+    from .config import INDICATOR_PARAMS
+    import copy
+
+    # 支持的覆盖参数映射
+    overrides = {}
+    if "rsi-period" in args:
+        overrides["rsi_periods"] = [int(args["rsi-period"])]
+    if "macd-fast" in args or "macd-slow" in args or "macd-signal" in args:
+        macd_p = copy.deepcopy(INDICATOR_PARAMS["macd"])
+        if "macd-fast" in args:
+            macd_p["fast"] = int(args["macd-fast"])
+        if "macd-slow" in args:
+            macd_p["slow"] = int(args["macd-slow"])
+        if "macd-signal" in args:
+            macd_p["signal"] = int(args["macd-signal"])
+        overrides["macd"] = macd_p
+    if "atr-period" in args:
+        overrides["atr_period"] = int(args["atr-period"])
+    if "adx-period" in args:
+        overrides["adx_period"] = int(args["adx-period"])
+    if "bb-period" in args:
+        bp = copy.deepcopy(INDICATOR_PARAMS["bollinger"])
+        bp["period"] = int(args["bb-period"])
+        overrides["bollinger"] = bp
+    if "ma-periods" in args:
+        overrides["ma_periods"] = [int(x) for x in args["ma-periods"].split(",")]
+
+    if not overrides:
+        return None
+
+    params = copy.deepcopy(INDICATOR_PARAMS)
+    params.update(overrides)
+    return params
+
+
 def main():
     if len(sys.argv) < 2:
         _print_usage()
@@ -606,7 +643,9 @@ def main():
     args = _parse_args(sys.argv[2:])
     fmt = args.get("format", "text")
 
-    tracker = MarketTracker()
+    # 构建指标参数覆盖
+    indicator_params = _build_indicator_overrides(args)
+    tracker = MarketTracker(indicator_params=indicator_params)
 
     if cmd == "watchlist":
         _handle_watchlist(tracker, args)
@@ -764,6 +803,16 @@ K线周期 (--period):
   weekly   周线
   monthly  月线
   注: 期货/黄金仅支持日线
+
+指标参数覆盖 (可选):
+  --rsi-period N       RSI周期 (默认14)
+  --macd-fast N        MACD快线 (默认12)
+  --macd-slow N        MACD慢线 (默认26)
+  --macd-signal N      MACD信号线 (默认9)
+  --atr-period N       ATR周期 (默认14)
+  --adx-period N       ADX周期 (默认14)
+  --bb-period N        布林带周期 (默认20)
+  --ma-periods 5,20,60 均线周期列表 (逗号分隔)
 
 示例:
   python -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock
