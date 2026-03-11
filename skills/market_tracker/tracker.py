@@ -285,6 +285,8 @@ class MarketTracker:
         action = result.get("action", {})
         support = result.get("support", 0)
         resistance = result.get("resistance", 0)
+        stop_loss = result.get("stop_loss", 0)
+        take_profit = result.get("take_profit", 0)
         lines.append("")
         lines.append("💡 【投资决策】")
         lines.append(
@@ -296,6 +298,9 @@ class MarketTracker:
         lines.append(
             f"   支撑位: ¥{_fmt_num(support)}  "
             f"阻力位: ¥{_fmt_num(resistance)}")
+        lines.append(
+            f"   🛑 止损位: ¥{_fmt_num(stop_loss)} (ATR×2)  "
+            f"🎯 止盈位: ¥{_fmt_num(take_profit)} (ATR×3)")
 
         # 风险提示
         risk = result.get("risk", {})

@@ -391,8 +391,8 @@ class InvestmentDecision:
         # 决策
         action = self._score_to_action(final_score)
 
-        # 支撑/阻力位
-        support, resistance = self._support_resistance(df)
+        # 支撑/阻力位 & ATR 止损/止盈
+        sr = self._support_resistance(df)
 
         # 市场状态判断
         market_state = self._detect_market_state(df, tech_signals)
@@ -407,8 +407,10 @@ class InvestmentDecision:
             "technical_score": tech_score,
             "final_score": final_score,
             "action": action,
-            "support": support,
-            "resistance": resistance,
+            "support": sr["support"],
+            "resistance": sr["resistance"],
+            "stop_loss": sr["stop_loss"],
+            "take_profit": sr["take_profit"],
             "market_state": market_state,
             "risk": risk,
             "quote": quote,
@@ -455,8 +457,8 @@ class InvestmentDecision:
                     "confidence": min(abs(score), 1),
                     "position_pct": "0-20%"}
 
-    def _support_resistance(self, df: pd.DataFrame) -> tuple[float, float]:
-        """简单支撑/阻力位识别（近期低点/高点）"""
+    def _support_resistance(self, df: pd.DataFrame) -> dict:
+        """支撑/阻力位识别 + ATR 动态止损/止盈"""
         close = df["close"].astype(float)
         low = df["low"].astype(float)
         high = df["high"].astype(float)
@@ -464,7 +466,22 @@ class InvestmentDecision:
         lookback = min(20, len(df))
         support = float(low.tail(lookback).min())
         resistance = float(high.tail(lookback).max())
-        return support, resistance
+
+        # ATR 动态止损/止盈
+        atr_val = ind.atr(high, low, close).iloc[-1]
+        last_close = float(close.iloc[-1])
+        if np.isnan(atr_val):
+            atr_val = 0
+        stop_loss = last_close - 2 * atr_val
+        take_profit = last_close + 3 * atr_val
+
+        return {
+            "support": support,
+            "resistance": resistance,
+            "stop_loss": round(stop_loss, 2),
+            "take_profit": round(take_profit, 2),
+            "atr": round(float(atr_val), 2),
+        }
 
     def _detect_market_state(self, df: pd.DataFrame,
                              signals: dict) -> str:
