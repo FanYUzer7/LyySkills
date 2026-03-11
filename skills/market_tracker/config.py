@@ -11,6 +11,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "market_data.db")
 WATCHLIST_PATH = os.path.join(BASE_DIR, "watchlist.json")
+TEST_DATA_DIR = os.path.join(BASE_DIR, "test_data")
 
 # ============================================================
 # 资产类型

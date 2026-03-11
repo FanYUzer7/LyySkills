@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from .config import (
-    ASSET_TYPE_NAMES, DEFAULT_MONITOR_INTERVAL,
+    ASSET_TYPE_NAMES, DEFAULT_MONITOR_INTERVAL, TEST_DATA_DIR,
 )
 from .db import MarketDB
 from .watchlist import Watchlist
@@ -33,14 +33,19 @@ class MarketTracker:
     # 单标的分析
     # ==========================================================
     def analyze(self, code: str, asset_type: str,
-                output_format: str = "text") -> str | dict:
+                output_format: str = "text",
+                test_mode: bool = False) -> str | dict:
         """
         对单个标的执行完整分析。
         :param code: 资产代码
         :param asset_type: stock/index/etf/futures/gold
         :param output_format: "text" 或 "json"
+        :param test_mode: 使用本地测试数据，跳过网络请求
         :return: 格式化报告或 dict
         """
+        if test_mode:
+            return self._analyze_from_test_data(code, asset_type, output_format)
+
         # 1. 获取实时行情
         quote = self.fetcher.get_realtime_quote(code, asset_type)
 
@@ -59,6 +64,54 @@ class MarketTracker:
             return _serialize(result)
 
         return self._format_report(code, asset_type, result)
+
+    def _analyze_from_test_data(self, code: str, asset_type: str,
+                                output_format: str) -> str | dict:
+        """离线测试模式：从 test_data/ 加载数据进行分析"""
+        import os
+        import pandas as pd
+
+        # 查找测试数据文件：优先精确匹配 {code}.json，否则用 sample_kline.json
+        exact_path = os.path.join(TEST_DATA_DIR, f"{code}.json")
+        sample_path = os.path.join(TEST_DATA_DIR, "sample_kline.json")
+        data_path = exact_path if os.path.exists(exact_path) else sample_path
+
+        if not os.path.exists(data_path):
+            msg = f"测试数据文件不存在: {data_path}"
+            return {"error": msg} if output_format == "json" else f"⚠️ {msg}"
+
+        with open(data_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        df = pd.DataFrame(data)
+        if "amount" in df.columns and "turnover" not in df.columns:
+            df["turnover"] = df["amount"]
+
+        # 构造模拟行情
+        last = df.iloc[-1]
+        quote = {
+            "name": f"[测试] {code}",
+            "code": code,
+            "price": float(last["close"]),
+            "change_pct": round((last["close"] / df.iloc[-2]["close"] - 1) * 100, 2) if len(df) > 1 else 0,
+            "volume": float(last["volume"]),
+            "turnover": float(last.get("turnover", 0)),
+            "high": float(last["high"]),
+            "low": float(last["low"]),
+            "open": float(last["open"]),
+        }
+
+        result = self.engine.analyze(df, quote)
+
+        if "error" in result:
+            if output_format == "json":
+                return result
+            return f"⚠️ 分析失败: {result['error']}"
+
+        if output_format == "json":
+            return _serialize(result)
+
+        report = self._format_report(code, asset_type, result)
+        return f"🧪 [离线测试模式] 数据来源: {os.path.basename(data_path)}\n\n{report}"
 
     # ==========================================================
     # 全自选分析
@@ -319,13 +372,16 @@ def _parse_args(argv: list[str]) -> dict:
     result = {}
     i = 0
     while i < len(argv):
-        if argv[i].startswith("--") and i + 1 < len(argv):
+        if argv[i].startswith("--"):
             key = argv[i][2:]
-            result[key] = argv[i + 1]
-            i += 2
-        elif argv[i].startswith("--"):
-            result[argv[i][2:]] = True
-            i += 1
+            # Next arg exists and is not another flag → key-value pair
+            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                result[key] = argv[i + 1]
+                i += 2
+            else:
+                # Boolean flag
+                result[key] = True
+                i += 1
         else:
             i += 1
     return result
@@ -348,10 +404,11 @@ def main():
     elif cmd == "analyze":
         code = args.get("code", "")
         asset_type = args.get("type", "stock")
+        test_mode = args.get("test", False)
         if not code:
             print("错误: --code 为必填")
             sys.exit(1)
-        result = tracker.analyze(code, asset_type, fmt)
+        result = tracker.analyze(code, asset_type, fmt, test_mode=test_mode)
         if fmt == "json":
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -429,7 +486,7 @@ def _print_usage():
   watchlist remove --code CODE
   watchlist list   [--group GROUP] [--type TYPE]
 
-  analyze     --code CODE --type TYPE [--format json]
+  analyze     --code CODE --type TYPE [--format json] [--test]
   analyze-all [--format json]
   overview    [--format json]
   monitor     [--interval SECONDS]
