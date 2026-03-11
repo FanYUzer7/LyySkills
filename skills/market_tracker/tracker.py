@@ -16,6 +16,7 @@ from .db import MarketDB
 from .watchlist import Watchlist
 from .data_fetcher import MarketDataFetcher
 from .decision_engine import InvestmentDecision
+from .backtest import BacktestEngine, format_backtest_report
 from .errors import format_error_for_display
 
 CST = timezone(timedelta(hours=8))
@@ -145,6 +146,45 @@ class MarketTracker:
             return data
 
         return self._format_overview(data)
+
+    # ==========================================================
+    # 策略回测
+    # ==========================================================
+    def backtest(self, code: str, asset_type: str,
+                 output_format: str = "text",
+                 test_mode: bool = False) -> str | dict:
+        """对单个标的执行策略回测"""
+        import os
+        import pandas as pd
+
+        if test_mode:
+            exact_path = os.path.join(TEST_DATA_DIR, f"{code}.json")
+            sample_path = os.path.join(TEST_DATA_DIR, "sample_kline.json")
+            data_path = exact_path if os.path.exists(exact_path) else sample_path
+            if not os.path.exists(data_path):
+                msg = f"测试数据文件不存在: {data_path}"
+                return {"error": msg} if output_format == "json" else f"⚠️ {msg}"
+            with open(data_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            df = pd.DataFrame(data)
+            if "amount" in df.columns and "turnover" not in df.columns:
+                df["turnover"] = df["amount"]
+        else:
+            df = self.fetcher.get_history_kline(code, asset_type)
+
+        if df is None or df.empty:
+            msg = "无法获取历史数据"
+            return {"error": msg} if output_format == "json" else f"⚠️ {msg}"
+
+        engine = BacktestEngine()
+        result = engine.run(df)
+
+        if output_format == "json":
+            return _serialize(result)
+
+        name = self.watchlist.get(code)
+        name_str = name["name"] if name else ""
+        return format_backtest_report(result, code, name_str)
 
     # ==========================================================
     # 定时监控
@@ -433,6 +473,19 @@ def main():
         interval = int(args.get("interval", DEFAULT_MONITOR_INTERVAL))
         tracker.monitor(interval)
 
+    elif cmd == "backtest":
+        code = args.get("code", "")
+        asset_type = args.get("type", "stock")
+        test_mode = args.get("test", False)
+        if not code:
+            print("错误: --code 为必填")
+            sys.exit(1)
+        result = tracker.backtest(code, asset_type, fmt, test_mode=test_mode)
+        if fmt == "json":
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(result)
+
     else:
         print(f"未知命令: {cmd}")
         _print_usage()
@@ -491,6 +544,7 @@ def _print_usage():
   analyze-all [--format json]
   overview    [--format json]
   monitor     [--interval SECONDS]
+  backtest    --code CODE --type TYPE [--format json] [--test]
 
 资产类型 (--type):
   stock    A股个股
@@ -503,6 +557,7 @@ def _print_usage():
   python -m skills.market_tracker.tracker watchlist add --code 600519 --name 贵州茅台 --type stock
   python -m skills.market_tracker.tracker analyze --code 600519 --type stock
   python -m skills.market_tracker.tracker overview
+  python -m skills.market_tracker.tracker backtest --code 600519 --type stock --test
   python -m skills.market_tracker.tracker monitor --interval 300
 """)
 
