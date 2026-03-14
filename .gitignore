@@ -19,3 +19,26 @@ build/
 .prompts/
 .github/
 ignored/
+
+# Claude Code
+CLAUDE.md
+.claude/
+.claude/settings.json
+.claude/memory/
+
+# Agent/IDE specific
+.cursor/
+.aider/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.temp
+.task/
