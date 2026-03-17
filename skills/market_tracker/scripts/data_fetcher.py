@@ -53,6 +53,8 @@ class MarketDataFetcher:
                 return self._realtime_stock(code)
             elif asset_type == "index":
                 return self._realtime_index(code)
+            elif asset_type == "block":
+                return self._realtime_block(code)
             elif asset_type == "etf":
                 return self._realtime_etf(code)
             elif asset_type == "fund":
@@ -112,6 +114,43 @@ class MarketDataFetcher:
             except Exception:
                 continue
         return None
+
+    def _realtime_block(self, code: str) -> dict | None:
+        """获取板块指数实时行情（如中证军工 399967）"""
+        try:
+            # 确保code是字符串格式
+            code_str = str(code).zfill(6)  # 补齐6位
+
+            # 尝试在各个指数类别中查找
+            categories = ["沪深重要指数", "上证系列指数", "深证系列指数", "中证系列指数"]
+            for category in categories:
+                try:
+                    df = ak.stock_zh_index_spot_em(symbol=category)
+                    # 将列转换为字符串进行比较
+                    df['代码_str'] = df['代码'].astype(str)
+                    row = df[df['代码_str'] == code_str]
+                    if not row.empty:
+                        r = row.iloc[0]
+                        return {
+                            "name": r.get("名称", ""),
+                            "code": code_str,
+                            "price": _safe_float(r.get("最新价")),
+                            "change_pct": _safe_float(r.get("涨跌幅")),
+                            "change_amt": _safe_float(r.get("涨跌额")),
+                            "volume": _safe_float(r.get("成交量")),
+                            "turnover": _safe_float(r.get("成交额")),
+                            "high": _safe_float(r.get("最高")),
+                            "low": _safe_float(r.get("最低")),
+                            "open": _safe_float(r.get("今开")),
+                            "prev_close": _safe_float(r.get("昨收")),
+                            "amplitude": _safe_float(r.get("振幅")),
+                        }
+                except Exception:
+                    continue
+
+            return MTE.make(code, MTE.DATA_NOT_FOUND, f"未找到板块指数 {code}")
+        except Exception as e:
+            return MTE.make(code, MTE.classify_exception(e), str(e))
 
     def _realtime_etf(self, code: str) -> dict | None:
         df = ak.fund_etf_spot_em()
@@ -292,6 +331,8 @@ class MarketDataFetcher:
                 return self._fetch_stock_kline(code, period, start_date, end_date)
             elif asset_type == "index":
                 return self._fetch_index_kline(code, period, start_date, end_date)
+            elif asset_type == "block":
+                return self._fetch_block_kline(code, period, start_date, end_date)
             elif asset_type == "etf":
                 return self._fetch_etf_kline(code, period, start_date, end_date)
             elif asset_type == "fund":
@@ -314,6 +355,15 @@ class MarketDataFetcher:
 
     def _fetch_index_kline(self, code, period, start_date, end_date):
         df = ak.index_zh_a_hist(symbol=code, period=period,
+                                start_date=start_date,
+                                end_date=end_date)
+        return _normalize_kline_df(df)
+
+    def _fetch_block_kline(self, code, period, start_date, end_date):
+        """获取板块指数历史K线（如中证军工 399606）"""
+        # 确保code是6位数字格式
+        code_str = str(code).zfill(6)
+        df = ak.index_zh_a_hist(symbol=code_str, period=period,
                                 start_date=start_date,
                                 end_date=end_date)
         return _normalize_kline_df(df)

@@ -17,11 +17,12 @@ TEST_DATA_DIR = os.path.join(BASE_DIR, "test_data")
 # ============================================================
 # 资产类型
 # ============================================================
-ASSET_TYPES = ("stock", "index", "etf", "fund", "futures", "gold")
+ASSET_TYPES = ("stock", "index", "block", "etf", "fund", "futures", "gold")
 
 ASSET_TYPE_NAMES = {
     "stock": "A股个股",
     "index": "指数",
+    "block": "板块指数",
     "etf": "ETF基金",
     "fund": "场外基金",
     "futures": "期货",
