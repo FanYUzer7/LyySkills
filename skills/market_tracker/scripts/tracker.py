@@ -201,6 +201,51 @@ class MarketTracker:
         return "\n".join(lines)
 
     # ==========================================================
+    # 清空数据
+    # ==========================================================
+    def clear_watchlist(self) -> dict:
+        """
+        清空整个跟踪列表。
+        """
+        count = self.watchlist.clear_all()
+        return {
+            "cleared_items": count,
+            "message": f"已清空 {count} 个跟踪标的"
+        }
+
+    def clear_database(self) -> dict:
+        """
+        清空数据库所有表的数据（保留表结构）。
+        """
+        self.db.clear_all()
+        return {
+            "message": "已清空数据库所有表"
+        }
+
+    def clear_all(self, include_watchlist: bool = True) -> dict:
+        """
+        清空所有数据：数据库 + 可选的跟踪列表。
+
+        Args:
+            include_watchlist: 是否同时清空跟踪列表，默认 True
+        """
+        results = {}
+
+        # 清空数据库
+        self.db.clear_all()
+        results["database"] = "已清空"
+
+        # 清空跟踪列表
+        if include_watchlist:
+            count = self.watchlist.clear_all()
+            results["watchlist"] = f"已清空 {count} 个标的"
+        else:
+            results["watchlist"] = "保留"
+
+        results["message"] = "所有数据已清空"
+        return results
+
+    # ==========================================================
     # 数据导出
     # ==========================================================
     def export(self, code: str, asset_type: str,

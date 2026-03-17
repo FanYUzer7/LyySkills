@@ -68,6 +68,15 @@ class Watchlist:
             return True
         return False
 
+    def clear_all(self) -> int:
+        """
+        清空整个跟踪列表，返回清空的标的数量。
+        """
+        count = len(self.items)
+        self.items.clear()
+        self.save()
+        return count
+
     def get(self, code: str) -> dict | None:
         """获取单个资产信息"""
         return self.items.get(code.strip())

@@ -337,6 +337,19 @@ class MarketDB:
             conn.execute("DELETE FROM kline_meta WHERE code = ?", (code,))
             conn.commit()
 
+    def clear_all(self):
+        """
+        清空数据库所有表的数据（保留表结构）。
+        清除的表：kline_daily, kline_meta, decisions, kline_minute, kline_minute_meta
+        """
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM kline_daily")
+            conn.execute("DELETE FROM kline_meta")
+            conn.execute("DELETE FROM decisions")
+            conn.execute("DELETE FROM kline_minute")
+            conn.execute("DELETE FROM kline_minute_meta")
+            conn.commit()
+
     def list_cached_codes(self) -> pd.DataFrame:
         """列出所有已缓存的标的"""
         with self._get_conn() as conn:
