@@ -134,23 +134,57 @@ class MarketDataFetcher:
     def _realtime_fund(self, code: str) -> dict | None:
         """获取场外基金实时行情"""
         try:
-            df = ak.fund_zh_open_spots()
-            row = df[df["基金代码"] == code]
+            df = ak.fund_open_fund_daily_em()
+            # 查找基金（列名可能因日期变化，需要用第一列匹配代码）
+            row = df[df.iloc[:, 0] == code]
             if row.empty:
                 return MTE.make(code, MTE.DATA_NOT_FOUND, "未找到该基金")
             r = row.iloc[0]
+
+            # 动态获取今日和昨日的净值列
+            today_nav = None
+            yesterday_nav = None
+            today_acc_nav = None
+            yesterday_acc_nav = None
+            today_growth = None
+
+            for col in df.columns:
+                col_str = str(col)
+                if '单位净值' in col_str and '今日' not in col_str and '昨日' not in col_str:
+                    # 尝试匹配日期格式: "2026-03-17-单位净值"
+                    if col_str.startswith('2026') or col_str.startswith('20'):
+                        if today_nav is None:
+                            today_nav = r.get(col)
+                        else:
+                            yesterday_nav = r.get(col)
+                elif '累计净值' in col_str:
+                    if today_acc_nav is None:
+                        today_acc_nav = r.get(col)
+                    else:
+                        yesterday_acc_nav = r.get(col)
+                elif '日增长率' in col_str:
+                    today_growth = r.get(col)
+
+            # 处理空值，取昨日数据作为当前
+            if not today_nav or today_nav == '':
+                today_nav = yesterday_nav
+            if not today_acc_nav or today_acc_nav == '':
+                today_acc_nav = yesterday_acc_nav
+            if not today_growth or today_growth == '':
+                today_growth = '0'
+
             return {
                 "name": r.get("基金简称", ""),
                 "code": code,
-                "price": _safe_float(r.get("单位净值")),
-                "change_pct": _safe_float(r.get("日增长率")),
-                "volume": _safe_float(r.get("累计净值")),  # 场外基金无真实成交量
+                "price": _safe_float(today_nav),
+                "change_pct": _safe_float(today_growth),
+                "volume": _safe_float(today_acc_nav),  # 用累计净值作为参考
                 "turnover": None,
                 "high": None,  # 场外基金无日内高低
                 "low": None,
                 "open": None,
-                "prev_close": _safe_float(r.get("单位净值")),
-                "accumulated_nav": _safe_float(r.get("累计净值")),
+                "prev_close": _safe_float(yesterday_nav),
+                "accumulated_nav": _safe_float(today_acc_nav),
             }
         except Exception as e:
             return MTE.make(code, MTE.classify_exception(e), str(e))
@@ -292,10 +326,46 @@ class MarketDataFetcher:
 
     def _fetch_fund_kline(self, code, period, start_date, end_date):
         """获取场外基金历史K线"""
-        df = ak.fund_zh_a_hist(
-            symbol=code, period=period,
-            start_date=start_date, end_date=end_date)
-        return _normalize_kline_df(df)
+        try:
+            df = ak.fund_open_fund_info_em(symbol=code)
+            if df is None or df.empty:
+                return None
+
+            # 转换列名
+            df = df.rename(columns={
+                '净值日期': 'date',
+                '单位净值': 'close',
+                '日增长率': 'change_pct'
+            })
+
+            # 只保留需要的列
+            if 'date' not in df.columns or 'close' not in df.columns:
+                return None
+
+            # 日期格式转换
+            df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+
+            # 按日期排序
+            df = df.sort_values('date')
+
+            # 过滤日期范围
+            if start_date:
+                start_fmt = start_date.replace('-', '')
+                df = df[df['date'].str.replace('-', '') >= start_fmt]
+            if end_date:
+                end_fmt = end_date.replace('-', '')
+                df = df[df['date'].str.replace('-', '') <= end_fmt]
+
+            # 添加其他列（场外基金没有这些数据）
+            df['open'] = df['close']
+            df['high'] = df['close']
+            df['low'] = df['close']
+            df['volume'] = 0
+
+            return df[['date', 'open', 'high', 'low', 'close', 'volume']]
+        except Exception as e:
+            print(f"获取基金历史K线失败: {e}")
+            return None
 
     def _fetch_futures_kline(self, code, start_date=None, end_date=None):
         kwargs = {"symbol": code}
