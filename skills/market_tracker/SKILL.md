@@ -57,13 +57,15 @@ python scripts/tracker.py
 
 ## 资产类型支持
 
-| 类型 | --type 值 | 代码格式示例 |
-|------|----------|-------------|
-| A股个股 | stock | 600519, 000001 |
-| 指数 | index | 000300, 399001 |
-| ETF基金 | etf | 510300, 159915 |
-| 期货 | futures | AU0, CU0, IF0 |
-| 黄金/贵金属 | gold | AU0, Au99.99 |
+| 类型 | --type 值 | 代码格式示例 | 分时数据支持 |
+|------|----------|-------------|------------|
+| A股个股 | stock | 600519, 000001 | ✅ |
+| 指数 | index | 000300, 399001 | ✅ |
+| ETF基金 | etf | 510300, 159915 | ✅ |
+| 场外基金 | fund | 000001, 161039 | ❌ |
+| 板块指数 | block | 816500.CNS (军工) | ❌ |
+| 期货 | futures | AU0, CU0, IF0 | ❌ |
+| 黄金/贵金属 | gold | AU0, Au99.99 | ❌ |
 
 ## 命令参考
 
@@ -104,6 +106,10 @@ python scripts/db.py --code 600519 --period daily --limit 100
 # 管理自选列表（独立CLI）
 python scripts/watchlist.py add --code 600519 --name 贵州茅台 --type stock
 python scripts/watchlist.py list
+
+# 分时数据分析
+python scripts/minute_analyzer.py --code 600519 --type stock
+python scripts/minute_analyzer.py --code 600519 --type stock --period 5
 ```
 
 ### 1. 自选列表管理
@@ -245,25 +251,43 @@ python scripts/tracker.py full-report --code 600519 --type stock --news-file new
 
 ## 分析维度
 
-### Layer 1: 经典技术指标信号（权重 60%）
+### Layer 1: 技术指标信号（权重 60%）
 
-| 指标 | 信号类型 | 说明 |
-|------|---------|------|
-| 均线排列 | 多/空头排列 | MA5/MA20/MA60 位置关系 |
-| MACD | 金叉/死叉/柱状图 | DIF/DEA 交叉 + Histogram 方向 |
-| RSI | 超买/超卖/中性 | >70超买, <30超卖（周期可配置） |
-| KDJ | 交叉/J值极端 | J>100或J<0为极端 |
-| 布林带 | 轨道位置 | 突破上/下轨, 带宽变化 |
-| ADX | 趋势强度 | >25有效趋势 |
-| 量价配合 | 放量/缩量 | 量比 + 价格方向 |
+| 指标 | 权重 | 信号类型 | 说明 |
+|------|------|---------|------|
+| 均线排列 | 10% | 多/空头排列 | MA5/MA20/MA60 位置关系 |
+| MACD | 10% | 金叉/死叉/柱状图 | DIF/DEA 交叉 + Histogram 方向 |
+| RSI | 8% | 超买/超卖/中性 | >70超买, <30超卖（周期可配置） |
+| KDJ | 8% | 交叉/J值极端 | J>100或J<0为极端 |
+| 布林带 | 8% | 轨道位置 | 突破上/下轨, 带宽变化 |
+| ADX | 8% | 趋势强度 | >25有效趋势 |
+| 量价配合 | 8% | 放量/缩量 | 量比 + 价格方向 |
+| SuperTrend | 8% | 趋势方向 | 上升/下降趋势线 |
+| SAR | 6% | 抛物线转向 | 价格与SAR位置关系 |
+| Ichimoku | 6% | 云图信号 | 转换线/基准线交叉 |
+| Stochastic | 6% | 超买超卖/交叉 | K/D线交叉 |
+| Williams %R | 5% | 超买超卖 | -20/-80 阈值 |
+| Keltner | 5% | 通道突破 | 价格与通道关系 |
+| Donchian | 4% | 突破信号 | 价格与通道上下轨 |
 
 ### Layer 2: 量化因子评分（权重 40%）
 
-| 因子 | 算法 | 权重 |
+| 因子 | 权重 | 算法 |
 |------|------|------|
-| 动量因子 | 20/60/120日收益率综合 | 40% |
-| 波动因子 | 历史波动率 + 最大回撤 | 30% |
-| 量价因子 | 量价相关性 + 量能趋势 | 30% |
+| 动量因子 | 40% | 20/60/120日收益率综合 |
+| 波动因子 | 30% | 历史波动率 + 最大回撤 |
+| 量价因子 | 30% | 量价相关性 + 量能趋势 |
+
+### Layer 3: 分时行为分析（额外15%权重，可选）
+
+当传入分时数据时启用，分析当日主力行为：
+
+| 行为 | 特征 |
+|------|------|
+| 吸筹 | 低位缩量横盘 + 尾盘拉升 |
+| 洗盘 | 冲高回落 + 缩量回调 |
+| 出货 | 高位放量滞涨 + 尾盘跳水 |
+| 拉升 | 放量上涨 + 价格创新高 |
 
 ### 止损/止盈
 
@@ -346,6 +370,51 @@ python scripts/tracker.py full-report --code 600519 --type stock --news-file new
 ============================================================
 ```
 
+### 10. 清空数据
+
+```bash
+# 清空所有数据（数据库 + 跟踪列表）
+python scripts/tracker.py clear
+
+# 只清空数据库（保留跟踪列表）
+python scripts/tracker.py clear --database
+
+# 只清空跟踪列表（保留数据库）
+python scripts/tracker.py clear --watchlist
+```
+
+> `clear_all()` 方法支持前向兼容，旧数据库会自动创建新的分时数据表（kline_minute, kline_minute_meta）。
+
+### 11. 手动记录决策
+
+```python
+# 在 Python 代码中调用
+from skills.market_tracker.scripts import tracker
+
+t = tracker.MarketTracker()
+
+# 手动记录一条决策
+result = t.record_decision(
+    code='600519',
+    asset_type='stock',
+    action='buy',      # buy/sell/hold
+    score=85.5,
+    price=1850.0,
+    stop_loss=1800.0,
+    take_profit=1900.0,
+    period='daily',
+    timestamp=None     # 可选，默认当前时间
+)
+
+print(result)
+# {"success": True, "message": "已记录决策: 600519 buy @ 1850.0"}
+```
+
+使用场景：
+- 实际成交后记录交易决策
+- 测试模式下手动记录决策
+- 批量导入历史决策
+
 ## 错误处理
 
 统一错误码体系，区分以下场景：
@@ -381,10 +450,18 @@ python scripts/tracker.py full-report --code 600519 --type stock --news-file new
   - 支持增量更新，自动缓存已获取数据
   - 按 `{code}:{period}` 独立缓存不同周期的数据
   - 可用 pandas `read_sql()` 直接查询
+- **分时数据**: `market_data.db` 中的 `kline_minute` 表
+  - 支持周期: 1/5/15/30/60 分钟
+  - 默认 5 分钟周期（平衡存储和分析精度）
+  - 字段: code, date, time, period, open, close, high, low, volume, turnover, avg_price, asset_type
+  - 通过 `MinuteDataFetcher` 类获取
 - **决策记录**: `market_data.db` 中的 `decisions` 表
   - 字段: code, asset_type, timestamp, action, score, price, stop_loss, take_profit, period
   - 通过 `history` 命令查询
+  - 可通过 `record_decision()` 手动记录
 - **数据源**: AKShare (MIT协议, 免费开源, 要求 `>=1.14.0,<2.0.0`)
+
+> **前向兼容**: 新版本会自动创建缺失的表（kline_minute, kline_minute_meta），旧数据库可直接使用。
 
 ## 依赖
 
