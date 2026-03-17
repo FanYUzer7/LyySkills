@@ -554,6 +554,112 @@ def _parse_args(argv: list[str]) -> dict:
     return args
 
 
+# ==============================================================
+# 分时数据获取
+# ==============================================================
+# 支持分时数据的资产类型
+MINUTE_SUPPORTED_ASSETS = ("stock", "etf", "index")
+
+# 支持的分时周期
+MINUTE_PERIODS = ("1", "5", "15", "30", "60")
+DEFAULT_MINUTE_PERIOD = "5"
+
+
+def get_minute_supported(asset_type: str) -> bool:
+    """检查资产类型是否支持分时数据"""
+    return asset_type in MINUTE_SUPPORTED_ASSETS
+
+
+class MinuteDataFetcher:
+    """分时数据获取器"""
+
+    def __init__(self, db_instance=None):
+        if db_instance:
+            self.db = db_instance
+        else:
+            self.db = db.MarketDB()
+
+    def get_realtime_minute(self, code: str, asset_type: str,
+                           period: str = DEFAULT_MINUTE_PERIOD,
+                           use_cache: bool = True) -> pd.DataFrame:
+        """
+        获取分时数据（实时或缓存）。
+        返回 DataFrame: time, open, high, low, close, volume, turnover, avg_price
+        """
+        if not get_minute_supported(asset_type):
+            return MTE.make(code, MTE.INVALID_CODE,
+                           f"资产类型 {asset_type} 不支持分时数据，支持: {MINUTE_SUPPORTED_ASSETS}")
+
+        # 标准化周期
+        period = str(period)
+        if period not in MINUTE_PERIODS:
+            period = DEFAULT_MINUTE_PERIOD
+
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # 尝试从缓存获取今日数据
+        if use_cache:
+            cached_latest = self.db.get_minute_latest_date(code, period)
+            if cached_latest == today:
+                # 今日已有缓存，直接返回
+                return self.db.load_minute_kline(code, period,
+                                                start_date=today,
+                                                end_date=today)
+
+        # 从AKShare获取
+        df = self._fetch_minute(code, asset_type, period)
+        if df is not None and not df.empty:
+            # 存储到数据库
+            self.db.save_minute_kline(code, df, period, asset_type)
+            # 返回今日数据
+            return self.db.load_minute_kline(code, period,
+                                            start_date=today,
+                                            end_date=today)
+
+        return df
+
+    def _fetch_minute(self, code: str, asset_type: str,
+                     period: str) -> pd.DataFrame | None:
+        """从AKShare获取分时数据"""
+        try:
+            if asset_type == "stock":
+                df = ak.stock_zh_a_hist_min_em(
+                    symbol=str(code).zfill(6),
+                    period=period,
+                    adjust="qfq")
+            elif asset_type == "etf":
+                df = ak.fund_etf_hist_min_em(
+                    symbol=str(code).zfill(6),
+                    period=period)
+            elif asset_type == "index":
+                df = ak.index_zh_a_hist_min_em(
+                    symbol=str(code).zfill(6),
+                    period=period)
+            else:
+                return None
+
+            if df is None or df.empty:
+                return None
+
+            # 统一列名
+            df = df.rename(columns={
+                "时间": "time",
+                "开盘": "open",
+                "收盘": "close",
+                "最高": "high",
+                "最低": "low",
+                "成交量": "volume",
+                "成交额": "turnover",
+                "均价": "avg_price"
+            })
+
+            return df
+
+        except Exception as e:
+            print(f"获取分时数据失败: {e}")
+            return None
+
+
 def main():
     args = _parse_args(sys.argv[1:])
     code = args.get("code", "")

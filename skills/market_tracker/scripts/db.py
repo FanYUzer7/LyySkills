@@ -82,6 +82,43 @@ class MarketDB:
                 CREATE INDEX IF NOT EXISTS idx_decisions_code_ts
                 ON decisions (code, timestamp)
             """)
+
+            # 分时K线表
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS kline_minute (
+                    code       TEXT    NOT NULL,
+                    date       TEXT    NOT NULL,
+                    time       TEXT    NOT NULL,
+                    period     TEXT    NOT NULL,
+                    open       REAL,
+                    close      REAL,
+                    high       REAL,
+                    low        REAL,
+                    volume     REAL,
+                    turnover   REAL,
+                    avg_price  REAL,
+                    asset_type TEXT,
+                    PRIMARY KEY (code, date, time, period)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_kline_minute_code_date
+                ON kline_minute (code, date, period)
+            """)
+
+            # 分时元数据表
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS kline_minute_meta (
+                    code          TEXT NOT NULL,
+                    period        TEXT NOT NULL,
+                    asset_type    TEXT,
+                    last_update   TEXT,
+                    earliest_date TEXT,
+                    latest_date   TEXT,
+                    PRIMARY KEY (code, period)
+                )
+            """)
+
             conn.commit()
 
     # ----------------------------------------------------------
@@ -178,6 +215,120 @@ class MarketDB:
                 "SELECT latest_date FROM kline_meta WHERE code = ?", (code,))
             row = cur.fetchone()
         return row[0] if row else None
+
+    # ----------------------------------------------------------
+    # 分时数据
+    # ----------------------------------------------------------
+    def save_minute_kline(self, code: str, df: pd.DataFrame,
+                          period: str, asset_type: str = "stock"):
+        """
+        写入分时K线数据到 SQLite。
+        df 需要包含列: time, open, high, low, close, volume
+        """
+        if df is None or df.empty:
+            return
+
+        df = df.copy()
+
+        # 统一列名
+        col_map = {
+            "时间": "time", "开盘": "open", "收盘": "close",
+            "最高": "high", "最低": "low", "成交量": "volume",
+            "成交额": "turnover", "均价": "avg_price"
+        }
+        df.rename(columns={k: v for k, v in col_map.items() if k in df.columns},
+                  inplace=True)
+
+        required = ["time", "open", "high", "low", "close", "volume"]
+        for col in required:
+            if col not in df.columns:
+                raise ValueError(f"DataFrame 缺少必需列: {col}")
+
+        # 从time中提取date
+        if "time" in df.columns:
+            df["date"] = pd.to_datetime(df["time"]).dt.strftime("%Y-%m-%d")
+
+        if "turnover" not in df.columns:
+            df["turnover"] = 0.0
+        if "avg_price" not in df.columns:
+            df["avg_price"] = 0.0
+
+        df["code"] = code
+        df["period"] = period
+        df["asset_type"] = asset_type
+
+        cols = ["code", "date", "time", "period", "open", "close", "high",
+                "low", "volume", "turnover", "avg_price", "asset_type"]
+        save_df = df[cols]
+
+        with self._get_conn() as conn:
+            save_df.to_sql("kline_minute", conn, if_exists="append",
+                          index=False, method=_insert_or_replace)
+            # 更新 meta
+            dates = save_df["date"]
+            conn.execute("""
+                INSERT OR REPLACE INTO kline_minute_meta
+                (code, period, asset_type, last_update, earliest_date, latest_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                code, period, asset_type,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                str(dates.min()), str(dates.max()),
+            ))
+            conn.commit()
+
+    def load_minute_kline(self, code: str, period: str = "5",
+                          start_date: str = None,
+                          end_date: str = None) -> pd.DataFrame:
+        """
+        从 SQLite 加载分时K线数据。
+        """
+        query = "SELECT * FROM kline_minute WHERE code = ? AND period = ?"
+        params: list = [code, str(period)]
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(str(start_date))
+        if end_date:
+            query += " AND date <= ?"
+            params.append(str(end_date))
+
+        query += " ORDER BY time ASC"
+
+        with self._get_conn() as conn:
+            df = pd.read_sql(query, conn, params=params)
+
+        if not df.empty:
+            numeric_cols = ["open", "high", "low", "close", "volume", "turnover", "avg_price"]
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        return df
+
+    def get_minute_latest_date(self, code: str, period: str = "5") -> str | None:
+        """获取某标的已缓存的最新分时日期"""
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                "SELECT latest_date FROM kline_minute_meta WHERE code = ? AND period = ?",
+                (code, str(period)))
+            row = cur.fetchone()
+        return row[0] if row else None
+
+    def delete_minute_kline(self, code: str, period: str = None):
+        """删除某标的分时数据"""
+        with self._get_conn() as conn:
+            if period:
+                conn.execute(
+                    "DELETE FROM kline_minute WHERE code = ? AND period = ?",
+                    (code, str(period)))
+                conn.execute(
+                    "DELETE FROM kline_minute_meta WHERE code = ? AND period = ?",
+                    (code, str(period)))
+            else:
+                conn.execute("DELETE FROM kline_minute WHERE code = ?", (code,))
+                conn.execute("DELETE FROM kline_minute_meta WHERE code = ?", (code,))
+            conn.commit()
 
     def delete_kline(self, code: str):
         """删除某标的全部历史数据"""
