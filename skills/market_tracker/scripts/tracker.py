@@ -246,6 +246,64 @@ class MarketTracker:
         return results
 
     # ==========================================================
+    # 决策记录
+    # ==========================================================
+    def record_decision(self, code: str, asset_type: str,
+                       action: str, score: float,
+                       price: float = 0,
+                       stop_loss: float = 0,
+                       take_profit: float = 0,
+                       period: str = "daily",
+                       timestamp: str = None) -> dict:
+        """
+        手动记录一条决策事件。
+
+        与 analyze() 自动记录的区别：
+        - analyze() 会在每次分析后自动记录决策
+        - record_decision() 允许手动记录（如实际成交后、测试时等）
+
+        Args:
+            code: 标的代码
+            asset_type: 资产类型
+            action: 操作 (buy/sell/hold)
+            score: 决策得分
+            price: 当前价格
+            stop_loss: 止损价
+            take_profit: 止盈价
+            period: 周期
+            timestamp: 时间戳（可选，默认当前时间）
+
+        Returns:
+            dict: {"success": True, "message": "..."}
+        """
+        from datetime import datetime
+
+        if timestamp is None:
+            timestamp = datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S")
+
+        try:
+            self.db.save_decision(
+                code=code,
+                asset_type=asset_type,
+                timestamp=timestamp,
+                action=action,
+                score=score,
+                price=price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                period=period,
+            )
+            return {
+                "success": True,
+                "message": f"已记录决策: {code} {action} @ {price}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"记录失败: {str(e)}"
+            }
+
+    # ==========================================================
     # 数据导出
     # ==========================================================
     def export(self, code: str, asset_type: str,
