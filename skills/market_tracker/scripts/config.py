@@ -55,6 +55,32 @@ INDICATOR_PARAMS = {
     "volume_ma_period": 20,
     # 历史波动率回看窗口
     "volatility_period": 20,
+
+    # ===== 补充指标参数 =====
+
+    # SuperTrend (period, multiplier)
+    "supertrend": {"period": 10, "multiplier": 3.0},
+    # SAR (acceleration, maximum)
+    "sar": {"acceleration": 0.02, "maximum": 0.2},
+    # Ichimoku (conversion, base, span_b, displacement)
+    "ichimoku": {
+        "conversion_period": 9,
+        "base_period": 26,
+        "span_b_period": 52,
+        "displacement": 26,
+    },
+    # Stochastic (k_period, d_period)
+    "stochastic": {"k_period": 14, "d_period": 3},
+    # Williams %R (period)
+    "williams_r_period": 14,
+    # MOM (period)
+    "mom_period": 10,
+    # Volume Profile (bins)
+    "volume_profile_bins": 20,
+    # Keltner Channel (ema_period, atr_period, multiplier)
+    "keltner": {"ema_period": 20, "atr_period": 10, "multiplier": 2.0},
+    # Donchian Channel (period)
+    "donchian_period": 20,
 }
 
 # ============================================================
