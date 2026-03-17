@@ -57,6 +57,15 @@ class TechnicalSignalGenerator:
         signals["adx_trend"] = self._adx_signal(indicators)
         signals["volume_price"] = self._volume_price_signal(indicators, close, vol)
 
+        # 新增指标信号
+        signals["supertrend"] = self._supertrend_signal(indicators, close)
+        signals["sar"] = self._sar_signal(indicators, close)
+        signals["ichimoku"] = self._ichimoku_signal(indicators, close)
+        signals["stochastic"] = self._stochastic_signal(indicators)
+        signals["williams_r"] = self._williams_signal(indicators)
+        signals["keltner"] = self._keltner_signal(indicators, close)
+        signals["donchian"] = self._donchian_signal(indicators, close)
+
         return signals
 
     def _ma_signal(self, ind_data: dict, close: pd.Series) -> dict:
@@ -260,6 +269,170 @@ class TechnicalSignalGenerator:
             return {"signal": 0, "confidence": 0.3,
                     "detail": f"量价正常 (量比={vol_ratio:.2f})"}
 
+    # ============================================================
+    # 新增指标信号
+    # ============================================================
+    def _supertrend_signal(self, ind_data: dict, close: pd.Series) -> dict:
+        """SuperTrend 趋势信号"""
+        st_line = ind_data.get("supertrend_line")
+        st_dir = ind_data.get("supertrend_direction")
+        if st_line is None or st_dir is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        c = close.iloc[-1]
+        st = st_line.iloc[-1]
+        direction = st_dir.iloc[-1] if hasattr(st_dir, 'iloc') else st_dir
+
+        if direction == 1:  # 上升趋势
+            return {"signal": 0.7, "confidence": 0.7,
+                    "detail": f"ST上升趋势 (价格={c:.2f}, ST线={st:.2f})"}
+        elif direction == -1:  # 下降趋势
+            return {"signal": -0.7, "confidence": 0.7,
+                    "detail": f"ST下降趋势 (价格={c:.2f}, ST线={st:.2f})"}
+        else:
+            return {"signal": 0, "confidence": 0.3, "detail": "ST趋势不明"}
+
+    def _sar_signal(self, ind_data: dict, close: pd.Series) -> dict:
+        """SAR 抛物线转向信号"""
+        sar_val = ind_data.get("sar")
+        if sar_val is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        c = close.iloc[-1]
+        s = sar_val.iloc[-1]
+
+        if c > s:
+            return {"signal": 0.6, "confidence": 0.65,
+                    "detail": f"价格({c:.2f})在SAR({s:.2f})上方, 看多"}
+        else:
+            return {"signal": -0.6, "confidence": 0.65,
+                    "detail": f"价格({c:.2f})在SAR({s:.2f})下方, 看空"}
+
+    def _ichimoku_signal(self, ind_data: dict, close: pd.Series) -> dict:
+        """Ichimoku 云图信号"""
+        ichimoku = ind_data.get("ichimoku")
+        if ichimoku is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        try:
+            tenkan, kijun, senkou_a, senkou_b, chikou = ichimoku
+            c = close.iloc[-1]
+
+            # 简化的云图信号：价格与云的关系
+            if tenkan is None or kijun is None:
+                return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+            tk = tenkan.iloc[-1]
+            kj = kijun.iloc[-1]
+
+            # 基准线与转换线金叉/死叉
+            if tk > kj:
+                return {"signal": 0.5, "confidence": 0.5,
+                        "detail": f"云图偏多 (T={tk:.2f}>K={kj:.2f})"}
+            else:
+                return {"signal": -0.5, "confidence": 0.5,
+                        "detail": f"云图偏空 (T={tk:.2f}<K={kj:.2f})"}
+        except:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+    def _stochastic_signal(self, ind_data: dict) -> dict:
+        """Stochastic 随机指标信号"""
+        stoch_k = ind_data.get("stoch_k")
+        stoch_d = ind_data.get("stoch_d")
+        if stoch_k is None or stoch_d is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        k = stoch_k.iloc[-1]
+        d = stoch_d.iloc[-1]
+
+        if k > 80:
+            return {"signal": -0.6, "confidence": 0.6,
+                    "detail": f"随机指标超买 K={k:.1f}"}
+        elif k < 20:
+            return {"signal": 0.6, "confidence": 0.6,
+                    "detail": f"随机指标超卖 K={k:.1f}"}
+        elif k > d and len(stoch_k) > 1 and stoch_k.iloc[-2] <= stoch_d.iloc[-2]:
+            return {"signal": 0.7, "confidence": 0.6,
+                    "detail": f"随机指标金叉 (K={k:.1f}, D={d:.1f})"}
+        elif k < d and len(stoch_k) > 1 and stoch_k.iloc[-2] >= stoch_d.iloc[-2]:
+            return {"signal": -0.7, "confidence": 0.6,
+                    "detail": f"随机指标死叉 (K={k:.1f}, D={d:.1f})"}
+        elif k > d:
+            return {"signal": 0.3, "confidence": 0.4,
+                    "detail": f"随机指标偏多 (K={k:.1f}, D={d:.1f})"}
+        else:
+            return {"signal": -0.3, "confidence": 0.4,
+                    "detail": f"随机指标偏空 (K={k:.1f}, D={d:.1f})"}
+
+    def _williams_signal(self, ind_data: dict) -> dict:
+        """Williams %R 威廉指标信号"""
+        williams = ind_data.get("williams_r")
+        if williams is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        w = williams.iloc[-1]
+
+        if w > -20:
+            return {"signal": -0.7, "confidence": 0.6,
+                    "detail": f"威廉指标超买 W%R={w:.1f}"}
+        elif w < -80:
+            return {"signal": 0.7, "confidence": 0.6,
+                    "detail": f"威廉指标超卖 W%R={w:.1f}"}
+        elif w > -50:
+            return {"signal": -0.3, "confidence": 0.4,
+                    "detail": f"威廉指标偏空 W%R={w:.1f}"}
+        else:
+            return {"signal": 0.3, "confidence": 0.4,
+                    "detail": f"威廉指标偏多 W%R={w:.1f}"}
+
+    def _keltner_signal(self, ind_data: dict, close: pd.Series) -> dict:
+        """Keltner Channel 肯特纳通道信号"""
+        kc_mid = ind_data.get("kc_middle")
+        kc_upper = ind_data.get("kc_upper")
+        kc_lower = ind_data.get("kc_lower")
+        if kc_mid is None or kc_upper is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        c = close.iloc[-1]
+        upper = kc_upper.iloc[-1]
+        lower = kc_lower.iloc[-1]
+
+        if c > upper:
+            return {"signal": -0.6, "confidence": 0.6,
+                    "detail": f"突破KC上轨, 注意回调"}
+        elif c < lower:
+            return {"signal": 0.6, "confidence": 0.6,
+                    "detail": f"跌破KC下轨, 关注反弹"}
+        else:
+            mid = kc_mid.iloc[-1]
+            pct = (c - lower) / (upper - lower) if upper != lower else 0.5
+            signal = (pct - 0.5) * 0.4
+            return {"signal": signal, "confidence": 0.4,
+                    "detail": f"KC通道内运行, 震荡整理"}
+
+    def _donchian_signal(self, ind_data: dict, close: pd.Series) -> dict:
+        """Donchian Channel 唐奇安通道信号"""
+        dc_upper = ind_data.get("donchian_upper")
+        dc_lower = ind_data.get("donchian_lower")
+        if dc_upper is None or dc_lower is None:
+            return {"signal": 0, "confidence": 0, "detail": "数据不足"}
+
+        c = close.iloc[-1]
+        upper = dc_upper.iloc[-1]
+        lower = dc_lower.iloc[-1]
+
+        if c >= upper:
+            return {"signal": 0.7, "confidence": 0.65,
+                    "detail": f"突破DC上轨, 强势上涨"}
+        elif c <= lower:
+            return {"signal": -0.7, "confidence": 0.65,
+                    "detail": f"跌破DC下轨, 强势下跌"}
+        else:
+            pct = (c - lower) / (upper - lower) if upper != lower else 0.5
+            signal = (pct - 0.5) * 0.4
+            return {"signal": signal, "confidence": 0.4,
+                    "detail": f"DC通道内, 观望为主"}
+
 
 # ==============================================================
 # Layer 2: 量化因子评分
@@ -378,11 +551,13 @@ class InvestmentDecision:
         self.signal_gen = TechnicalSignalGenerator(indicator_params)
         self.factor_scorer = FactorScorer()
 
-    def analyze(self, df: pd.DataFrame, quote: dict = None) -> dict:
+    def analyze(self, df: pd.DataFrame, quote: dict = None,
+                minute_df: pd.DataFrame = None) -> dict:
         """
         对单个标的进行完整分析。
         :param df: 历史K线 DataFrame
         :param quote: 实时行情 dict (可选)
+        :param minute_df: 分时数据 DataFrame (可选)
         :return: 完整决策报告 dict
         """
         if df is None or df.empty or len(df) < 20:
@@ -395,12 +570,45 @@ class InvestmentDecision:
         factor_scores = self.factor_scorer.score(df)
         composite = self.factor_scorer.composite_score(factor_scores)
 
+        # Layer 3: 分时行为分析（可选）
+        institutional_score = 0
+        institutional_analysis = None
+        if minute_df is not None and not minute_df.empty:
+            try:
+                import minute_analyzer as ma
+                analyzer = ma.MinuteAnalyzer("", "")
+                analyzer.data = minute_df
+                # 只取行为分析部分
+                inst_result = analyzer._analyze_institutional(minute_df)
+                if inst_result and "probabilities" in inst_result:
+                    probs = inst_result["probabilities"]
+                    # 将概率转换为得分
+                    # 吸筹/拉升 -> 正分，出货 -> 负分
+                    institutional_score = (
+                        probs.get("吸筹", 0) / 100 * 0.3 +
+                        probs.get("拉升", 0) / 100 * 0.5 -
+                        probs.get("出货", 0) / 100 * 0.5
+                    )
+                    institutional_analysis = inst_result
+            except Exception:
+                pass  # 分时分析失败不影响主流程
+
         # 综合
         tech_score = self._weighted_tech_score(tech_signals)
-        final_score = (
-            tech_score * LAYER_WEIGHTS["technical_signal"]
-            + composite * LAYER_WEIGHTS["factor_score"]
-        )
+
+        # 如果有分时数据，调整最终得分
+        if minute_df is not None and not minute_df.empty:
+            # 分时行为分析权重 15%
+            final_score = (
+                tech_score * LAYER_WEIGHTS["technical_signal"] * 0.85
+                + composite * LAYER_WEIGHTS["factor_score"] * 0.85
+                + institutional_score * 0.15
+            )
+        else:
+            final_score = (
+                tech_score * LAYER_WEIGHTS["technical_signal"]
+                + composite * LAYER_WEIGHTS["factor_score"]
+            )
 
         # 决策
         action = self._score_to_action(final_score)
@@ -428,6 +636,7 @@ class InvestmentDecision:
             "market_state": market_state,
             "risk": risk,
             "quote": quote,
+            "institutional_analysis": institutional_analysis,
         }
 
     def _weighted_tech_score(self, signals: dict) -> float:

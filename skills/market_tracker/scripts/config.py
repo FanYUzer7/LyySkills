@@ -90,13 +90,21 @@ INDICATOR_PARAMS = {
 # ============================================================
 # Layer 1: 技术信号权重（各指标对最终信号的贡献）
 SIGNAL_WEIGHTS = {
-    "ma_alignment": 0.15,       # 均线多空排列
-    "macd_cross": 0.15,         # MACD 金叉/死叉
-    "rsi": 0.10,                # RSI 超买超卖
-    "kdj": 0.10,                # KDJ 交叉
-    "bollinger": 0.10,          # 布林带位置
-    "adx_trend": 0.10,          # ADX 趋势强度
-    "volume_price": 0.10,       # 量价配合
+    "ma_alignment": 0.10,       # 均线多空排列
+    "macd_cross": 0.10,         # MACD 金叉/死叉
+    "rsi": 0.08,                # RSI 超买超卖
+    "kdj": 0.08,                # KDJ 交叉
+    "bollinger": 0.08,          # 布林带位置
+    "adx_trend": 0.08,          # ADX 趋势强度
+    "volume_price": 0.08,       # 量价配合
+    # 新增指标
+    "supertrend": 0.08,         # SuperTrend 趋势
+    "sar": 0.06,                # SAR 抛物线
+    "ichimoku": 0.06,           # Ichimoku 云图
+    "stochastic": 0.06,         # Stochastic 随机
+    "williams_r": 0.05,         # Williams %R
+    "keltner": 0.05,            # Keltner Channel
+    "donchian": 0.04,           # Donchian Channel
 }
 
 # Layer 2: 量化因子权重
