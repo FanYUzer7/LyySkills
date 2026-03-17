@@ -55,6 +55,8 @@ class MarketDataFetcher:
                 return self._realtime_index(code)
             elif asset_type == "etf":
                 return self._realtime_etf(code)
+            elif asset_type == "fund":
+                return self._realtime_fund(code)
             elif asset_type == "futures":
                 return self._realtime_futures(code)
             elif asset_type == "gold":
@@ -128,6 +130,30 @@ class MarketDataFetcher:
             "low": _safe_float(r.get("最低")),
             "open": _safe_float(r.get("今开")),
         }
+
+    def _realtime_fund(self, code: str) -> dict | None:
+        """获取场外基金实时行情"""
+        try:
+            df = ak.fund_zh_open_spots()
+            row = df[df["基金代码"] == code]
+            if row.empty:
+                return MTE.make(code, MTE.DATA_NOT_FOUND, "未找到该基金")
+            r = row.iloc[0]
+            return {
+                "name": r.get("基金简称", ""),
+                "code": code,
+                "price": _safe_float(r.get("单位净值")),
+                "change_pct": _safe_float(r.get("日增长率")),
+                "volume": _safe_float(r.get("累计净值")),  # 场外基金无真实成交量
+                "turnover": None,
+                "high": None,  # 场外基金无日内高低
+                "low": None,
+                "open": None,
+                "prev_close": _safe_float(r.get("单位净值")),
+                "accumulated_nav": _safe_float(r.get("累计净值")),
+            }
+        except Exception as e:
+            return MTE.make(code, MTE.classify_exception(e), str(e))
 
     def _realtime_futures(self, code: str) -> dict | None:
         # 新浪期货实时行情 — 使用内盘行情
@@ -234,6 +260,8 @@ class MarketDataFetcher:
                 return self._fetch_index_kline(code, period, start_date, end_date)
             elif asset_type == "etf":
                 return self._fetch_etf_kline(code, period, start_date, end_date)
+            elif asset_type == "fund":
+                return self._fetch_fund_kline(code, period, start_date, end_date)
             elif asset_type == "futures":
                 return self._fetch_futures_kline(code, start_date, end_date)
             elif asset_type == "gold":
@@ -260,6 +288,13 @@ class MarketDataFetcher:
         df = ak.fund_etf_hist_em(
             symbol=code, period=period,
             start_date=start_date, end_date=end_date, adjust="qfq")
+        return _normalize_kline_df(df)
+
+    def _fetch_fund_kline(self, code, period, start_date, end_date):
+        """获取场外基金历史K线"""
+        df = ak.fund_zh_a_hist(
+            symbol=code, period=period,
+            start_date=start_date, end_date=end_date)
         return _normalize_kline_df(df)
 
     def _fetch_futures_kline(self, code, start_date=None, end_date=None):

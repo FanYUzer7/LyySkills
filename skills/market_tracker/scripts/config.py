@@ -17,12 +17,13 @@ TEST_DATA_DIR = os.path.join(BASE_DIR, "test_data")
 # ============================================================
 # 资产类型
 # ============================================================
-ASSET_TYPES = ("stock", "index", "etf", "futures", "gold")
+ASSET_TYPES = ("stock", "index", "etf", "fund", "futures", "gold")
 
 ASSET_TYPE_NAMES = {
     "stock": "A股个股",
     "index": "指数",
     "etf": "ETF基金",
+    "fund": "场外基金",
     "futures": "期货",
     "gold": "黄金/贵金属",
 }
@@ -147,7 +148,7 @@ PERIOD_NAMES = {
     "monthly": "月线",
 }
 # 仅支持日线的资产类型（AKShare 限制）
-DAILY_ONLY_ASSET_TYPES = ("futures", "gold")
+DAILY_ONLY_ASSET_TYPES = ("futures", "gold", "fund")
 
 # ============================================================
 # 量化因子参数
