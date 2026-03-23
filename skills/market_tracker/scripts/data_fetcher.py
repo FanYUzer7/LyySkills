@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import config
 import db
 from errors import MarketTrackerError as MTE
+from utils import safe_float, fmt_date_dash
 
 DEFAULT_HISTORY_DAYS = config.DEFAULT_HISTORY_DAYS
 DAILY_ONLY_ASSET_TYPES = config.DAILY_ONLY_ASSET_TYPES
@@ -78,17 +79,17 @@ class MarketDataFetcher:
         return {
             "name": r.get("名称", ""),
             "code": code,
-            "price": _safe_float(r.get("最新价")),
-            "change_pct": _safe_float(r.get("涨跌幅")),
-            "change_amt": _safe_float(r.get("涨跌额")),
-            "volume": _safe_float(r.get("成交量")),
-            "turnover": _safe_float(r.get("成交额")),
-            "high": _safe_float(r.get("最高")),
-            "low": _safe_float(r.get("最低")),
-            "open": _safe_float(r.get("今开")),
-            "prev_close": _safe_float(r.get("昨收")),
-            "amplitude": _safe_float(r.get("振幅")),
-            "turnover_rate": _safe_float(r.get("换手率")),
+            "price": safe_float(r.get("最新价")),
+            "change_pct": safe_float(r.get("涨跌幅")),
+            "change_amt": safe_float(r.get("涨跌额")),
+            "volume": safe_float(r.get("成交量")),
+            "turnover": safe_float(r.get("成交额")),
+            "high": safe_float(r.get("最高")),
+            "low": safe_float(r.get("最低")),
+            "open": safe_float(r.get("今开")),
+            "prev_close": safe_float(r.get("昨收")),
+            "amplitude": safe_float(r.get("振幅")),
+            "turnover_rate": safe_float(r.get("换手率")),
         }
 
     def _realtime_index(self, code: str) -> dict | None:
@@ -102,14 +103,14 @@ class MarketDataFetcher:
                     return {
                         "name": r.get("名称", ""),
                         "code": code,
-                        "price": _safe_float(r.get("最新价")),
-                        "change_pct": _safe_float(r.get("涨跌幅")),
-                        "change_amt": _safe_float(r.get("涨跌额")),
-                        "volume": _safe_float(r.get("成交量")),
-                        "turnover": _safe_float(r.get("成交额")),
-                        "high": _safe_float(r.get("最高")),
-                        "low": _safe_float(r.get("最低")),
-                        "open": _safe_float(r.get("今开")),
+                        "price": safe_float(r.get("最新价")),
+                        "change_pct": safe_float(r.get("涨跌幅")),
+                        "change_amt": safe_float(r.get("涨跌额")),
+                        "volume": safe_float(r.get("成交量")),
+                        "turnover": safe_float(r.get("成交额")),
+                        "high": safe_float(r.get("最高")),
+                        "low": safe_float(r.get("最低")),
+                        "open": safe_float(r.get("今开")),
                     }
             except Exception:
                 continue
@@ -134,16 +135,16 @@ class MarketDataFetcher:
                         return {
                             "name": r.get("名称", ""),
                             "code": code_str,
-                            "price": _safe_float(r.get("最新价")),
-                            "change_pct": _safe_float(r.get("涨跌幅")),
-                            "change_amt": _safe_float(r.get("涨跌额")),
-                            "volume": _safe_float(r.get("成交量")),
-                            "turnover": _safe_float(r.get("成交额")),
-                            "high": _safe_float(r.get("最高")),
-                            "low": _safe_float(r.get("最低")),
-                            "open": _safe_float(r.get("今开")),
-                            "prev_close": _safe_float(r.get("昨收")),
-                            "amplitude": _safe_float(r.get("振幅")),
+                            "price": safe_float(r.get("最新价")),
+                            "change_pct": safe_float(r.get("涨跌幅")),
+                            "change_amt": safe_float(r.get("涨跌额")),
+                            "volume": safe_float(r.get("成交量")),
+                            "turnover": safe_float(r.get("成交额")),
+                            "high": safe_float(r.get("最高")),
+                            "low": safe_float(r.get("最低")),
+                            "open": safe_float(r.get("今开")),
+                            "prev_close": safe_float(r.get("昨收")),
+                            "amplitude": safe_float(r.get("振幅")),
                         }
                 except Exception:
                     continue
@@ -161,13 +162,13 @@ class MarketDataFetcher:
         return {
             "name": r.get("名称", ""),
             "code": code,
-            "price": _safe_float(r.get("最新价")),
-            "change_pct": _safe_float(r.get("涨跌幅")),
-            "volume": _safe_float(r.get("成交量")),
-            "turnover": _safe_float(r.get("成交额")),
-            "high": _safe_float(r.get("最高")),
-            "low": _safe_float(r.get("最低")),
-            "open": _safe_float(r.get("今开")),
+            "price": safe_float(r.get("最新价")),
+            "change_pct": safe_float(r.get("涨跌幅")),
+            "volume": safe_float(r.get("成交量")),
+            "turnover": safe_float(r.get("成交额")),
+            "high": safe_float(r.get("最高")),
+            "low": safe_float(r.get("最低")),
+            "open": safe_float(r.get("今开")),
         }
 
     def _realtime_fund(self, code: str) -> dict | None:
@@ -215,15 +216,15 @@ class MarketDataFetcher:
             return {
                 "name": r.get("基金简称", ""),
                 "code": code,
-                "price": _safe_float(today_nav),
-                "change_pct": _safe_float(today_growth),
-                "volume": _safe_float(today_acc_nav),  # 用累计净值作为参考
+                "price": safe_float(today_nav),
+                "change_pct": safe_float(today_growth),
+                "volume": safe_float(today_acc_nav),  # 用累计净值作为参考
                 "turnover": None,
                 "high": None,  # 场外基金无日内高低
                 "low": None,
                 "open": None,
-                "prev_close": _safe_float(yesterday_nav),
-                "accumulated_nav": _safe_float(today_acc_nav),
+                "prev_close": safe_float(yesterday_nav),
+                "accumulated_nav": safe_float(today_acc_nav),
             }
         except Exception as e:
             return MTE.make(code, MTE.classify_exception(e), str(e))
@@ -245,12 +246,12 @@ class MarketDataFetcher:
         return {
             "name": r.get("name", r.get("symbol", code)),
             "code": code,
-            "price": _safe_float(r.get("last_price", r.get("current_price"))),
-            "change_pct": _safe_float(r.get("change_percent")),
-            "volume": _safe_float(r.get("volume")),
-            "high": _safe_float(r.get("high")),
-            "low": _safe_float(r.get("low")),
-            "open": _safe_float(r.get("open")),
+            "price": safe_float(r.get("last_price", r.get("current_price"))),
+            "change_pct": safe_float(r.get("change_percent")),
+            "volume": safe_float(r.get("volume")),
+            "high": safe_float(r.get("high")),
+            "low": safe_float(r.get("low")),
+            "open": safe_float(r.get("open")),
         }
 
     def _realtime_gold(self, code: str) -> dict | None:
@@ -295,8 +296,8 @@ class MarketDataFetcher:
                     # 缓存已覆盖请求范围
                     return self.db.load_kline(
                         cache_key,
-                        start_date=_fmt_date_dash(start_date),
-                        end_date=_fmt_date_dash(end_date))
+                        start_date=fmt_date_dash(start_date),
+                        end_date=fmt_date_dash(end_date))
                 else:
                     # 增量拉取：从缓存最新日期的下一天开始
                     incremental_start = (
@@ -310,8 +311,8 @@ class MarketDataFetcher:
                         self.db.save_kline(cache_key, new_df, asset_type)
                     return self.db.load_kline(
                         cache_key,
-                        start_date=_fmt_date_dash(start_date),
-                        end_date=_fmt_date_dash(end_date))
+                        start_date=fmt_date_dash(start_date),
+                        end_date=fmt_date_dash(end_date))
 
         # 无缓存，全量拉取
         df = self._fetch_kline(code, asset_type, period, start_date, end_date)
@@ -319,8 +320,8 @@ class MarketDataFetcher:
             self.db.save_kline(cache_key, df, asset_type)
         return self.db.load_kline(
             cache_key,
-            start_date=_fmt_date_dash(start_date),
-            end_date=_fmt_date_dash(end_date))
+            start_date=fmt_date_dash(start_date),
+            end_date=fmt_date_dash(end_date))
 
     def _fetch_kline(self, code: str, asset_type: str,
                      period: str, start_date: str,
@@ -344,8 +345,7 @@ class MarketDataFetcher:
             return None
         except Exception as e:
             ec = MTE.classify_exception(e)
-            print(f"⚠️ 获取 {code} K线数据失败: [{ec}] {e}")
-            return None
+            return MTE.make(code, ec, str(e))
 
     def _fetch_stock_kline(self, code, period, start_date, end_date):
         df = ak.stock_zh_a_hist(
@@ -414,8 +414,7 @@ class MarketDataFetcher:
 
             return df[['date', 'open', 'high', 'low', 'close', 'volume']]
         except Exception as e:
-            print(f"获取基金历史K线失败: {e}")
-            return None
+            return MTE.make(code, MTE.classify_exception(e), str(e))
 
     def _fetch_futures_kline(self, code, start_date=None, end_date=None):
         kwargs = {"symbol": code}
@@ -434,9 +433,9 @@ class MarketDataFetcher:
             # spot_hist_sge 不支持日期参数，获取后手动过滤
             if df is not None and not df.empty and "date" in df.columns:
                 if start_date:
-                    df = df[df["date"] >= _fmt_date_dash(start_date)]
+                    df = df[df["date"] >= fmt_date_dash(start_date)]
                 if end_date:
-                    df = df[df["date"] <= _fmt_date_dash(end_date)]
+                    df = df[df["date"] <= fmt_date_dash(end_date)]
             return df
         except Exception:
             return self._fetch_futures_kline(code, start_date, end_date)
@@ -458,10 +457,10 @@ class MarketDataFetcher:
                     overview.append({
                         "name": r.get("名称", ""),
                         "code": idx_code,
-                        "price": _safe_float(r.get("最新价")),
-                        "change_pct": _safe_float(r.get("涨跌幅")),
-                        "volume": _safe_float(r.get("成交量")),
-                        "turnover": _safe_float(r.get("成交额")),
+                        "price": safe_float(r.get("最新价")),
+                        "change_pct": safe_float(r.get("涨跌幅")),
+                        "volume": safe_float(r.get("成交量")),
+                        "turnover": safe_float(r.get("成交额")),
                     })
         except Exception as e:
             overview.append(MTE.make("overview", MTE.classify_exception(e), str(e)))
@@ -515,22 +514,6 @@ def _normalize_kline_df(df: pd.DataFrame) -> pd.DataFrame | None:
     return df
 
 
-def _safe_float(val) -> float | None:
-    """安全转换为 float"""
-    if val is None or val == "" or val == "-":
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _fmt_date_dash(date_str: str) -> str:
-    """将 YYYYMMDD 转为 YYYY-MM-DD"""
-    s = date_str.replace("-", "")
-    if len(s) == 8:
-        return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
-    return date_str
 
 
 # ==========================================================
@@ -656,12 +639,11 @@ class MinuteDataFetcher:
             return df
 
         except Exception as e:
-            print(f"获取分时数据失败: {e}")
-            return None
+            return MTE.make(code, MTE.classify_exception(e), str(e))
 
 
 def main():
-    args = _parse_args(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
     code = args.get("code", "")
     asset_type = args.get("type", "stock")
     period = args.get("period", "daily")

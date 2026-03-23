@@ -13,6 +13,10 @@ import pandas as pd
 
 import db
 import data_fetcher
+import errors
+from utils import parse_args
+
+MTE = errors.MarketTrackerError
 
 
 class MinuteAnalyzer:
@@ -45,7 +49,7 @@ class MinuteAnalyzer:
         分析当日分时数据，返回分析结果字典。
         """
         if self.data is None or self.data.empty:
-            return {"error": "No data available"}
+            return MTE.make(self.code, MTE.DATA_NOT_FOUND, "分时数据不可用")
 
         df = self.data.copy()
 
@@ -380,7 +384,7 @@ class MinuteAnalyzer:
     def _analyze_institutional(self, df: pd.DataFrame) -> dict:
         """综合分析主力行为"""
         if df.empty or len(df) < 4:
-            return {"error": "数据不足"}
+            return MTE.make(self.code, MTE.DATA_INSUFFICIENT, "分时数据不足4条，无法分析主力行为")
 
         # 计算各项特征
         accumulation_score = self._detect_accumulation(df)
@@ -594,7 +598,7 @@ class MinuteAnalyzer:
         获取分时交易信号。
         """
         if self.data is None or self.data.empty:
-            return {"error": "No data available"}
+            return MTE.make(self.code, MTE.DATA_NOT_FOUND, "分时数据不可用，无法获取信号")
 
         signals = []
         df = self.data
@@ -726,25 +730,8 @@ def format_analysis(analysis: dict) -> str:
 # ============================================================
 # CLI 入口
 # ============================================================
-def _parse_args(argv: list[str]) -> dict:
-    args = {}
-    i = 0
-    while i < len(argv):
-        if argv[i].startswith("--"):
-            key = argv[i][2:]
-            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
-                args[key] = argv[i + 1]
-                i += 2
-            else:
-                args[key] = True
-                i += 1
-        else:
-            i += 1
-    return args
-
-
 def main():
-    args = _parse_args(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
     code = args.get("code", "")
     asset_type = args.get("type", "stock")
     period = args.get("period", "5")

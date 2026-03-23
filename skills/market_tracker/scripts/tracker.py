@@ -27,6 +27,7 @@ import data_fetcher
 import decision_engine
 import backtest
 import errors
+from utils import parse_args, fmt_num, fmt_pct, fmt_vol, fmt_money, serialize
 
 ASSET_TYPE_NAMES = config.ASSET_TYPE_NAMES
 DEFAULT_MONITOR_INTERVAL = config.DEFAULT_MONITOR_INTERVAL
@@ -135,7 +136,7 @@ class MarketTracker:
             self._record_decision(code, asset_type, result, period)
 
         if output_format == "json":
-            return _serialize(result)
+            return serialize(result)
 
         report = self._format_report(code, asset_type, result, period)
         if test_mode and test_data_path:
@@ -194,8 +195,8 @@ class MarketTracker:
         for _, row in df.iterrows():
             lines.append(
                 f"  {row['timestamp']:<20} {row['code']:<8} {row['action']:<10} "
-                f"{row['score']:>+6.2f} {_fmt_num(row['price']):>10} "
-                f"{_fmt_num(row['stop_loss']):>10} {_fmt_num(row['take_profit']):>10}"
+                f"{row['score']:>+6.2f} {fmt_num(row['price']):>10} "
+                f"{fmt_num(row['stop_loss']):>10} {fmt_num(row['take_profit']):>10}"
             )
         lines.append(sep)
         return "\n".join(lines)
@@ -410,7 +411,7 @@ class MarketTracker:
                 news_result = {"error": f"资讯分析失败: {e}"}
 
         if output_format == "json":
-            return _serialize({
+            return serialize({
                 "technical": tech_result,
                 "news": news_result,
             })
@@ -513,7 +514,7 @@ class MarketTracker:
         result = engine.run(df)
 
         if output_format == "json":
-            return _serialize(result)
+            return serialize(result)
 
         name = self.watchlist.get(code)
         name_str = name["name"] if name else ""
@@ -619,10 +620,10 @@ class MarketTracker:
             chg = quote.get("change_pct")
             vol = quote.get("volume")
             turn = quote.get("turnover")
-            lines.append(f"   当前价: ¥{_fmt_num(price)}  "
-                         f"涨跌幅: {_fmt_pct(chg)}")
-            lines.append(f"   成交量: {_fmt_vol(vol)}  "
-                         f"成交额: {_fmt_money(turn)}")
+            lines.append(f"   当前价: ¥{fmt_num(price)}  "
+                         f"涨跌幅: {fmt_pct(chg)}")
+            lines.append(f"   成交量: {fmt_vol(vol)}  "
+                         f"成交额: {fmt_money(turn)}")
 
         # 技术信号
         tech = result.get("technical_signals", {})
@@ -675,11 +676,11 @@ class MarketTracker:
             f"   置信度: {action.get('confidence', 0):.0%}  "
             f"推荐仓位: {action.get('position_pct', 'N/A')}")
         lines.append(
-            f"   支撑位: ¥{_fmt_num(support)}  "
-            f"阻力位: ¥{_fmt_num(resistance)}")
+            f"   支撑位: ¥{fmt_num(support)}  "
+            f"阻力位: ¥{fmt_num(resistance)}")
         lines.append(
-            f"   🛑 止损位: ¥{_fmt_num(stop_loss)} (ATR×2)  "
-            f"🎯 止盈位: ¥{_fmt_num(take_profit)} (ATR×3)")
+            f"   🛑 止损位: ¥{fmt_num(stop_loss)} (ATR×2)  "
+            f"🎯 止盈位: ¥{fmt_num(take_profit)} (ATR×3)")
 
         # 风险提示
         risk = result.get("risk", {})
@@ -724,8 +725,8 @@ class MarketTracker:
             turn = item.get("turnover")
             arrow = "🔺" if (chg or 0) > 0 else "🔻" if (chg or 0) < 0 else "➖"
             lines.append(
-                f"  {arrow} {name:<10} {_fmt_num(price):>12}  "
-                f"{_fmt_pct(chg):>8}  成交额: {_fmt_money(turn)}")
+                f"  {arrow} {name:<10} {fmt_num(price):>12}  "
+                f"{fmt_pct(chg):>8}  成交额: {fmt_money(turn)}")
 
         lines.append("")
         lines.append(sep)
@@ -733,91 +734,12 @@ class MarketTracker:
 
 
 # ==============================================================
-# 工具函数
+# 工具函数（已迁移到 utils.py）
 # ==============================================================
-
-def _fmt_num(val) -> str:
-    if val is None:
-        return "--"
-    try:
-        return f"{float(val):,.2f}"
-    except (ValueError, TypeError):
-        return str(val)
-
-
-def _fmt_pct(val) -> str:
-    if val is None:
-        return "--"
-    try:
-        v = float(val)
-        sign = "+" if v > 0 else ""
-        return f"{sign}{v:.2f}%"
-    except (ValueError, TypeError):
-        return str(val)
-
-
-def _fmt_vol(val) -> str:
-    if val is None:
-        return "--"
-    try:
-        v = float(val)
-        if v >= 1e8:
-            return f"{v / 1e8:.2f}亿手"
-        elif v >= 1e4:
-            return f"{v / 1e4:.1f}万手"
-        return f"{v:.0f}手"
-    except (ValueError, TypeError):
-        return str(val)
-
-
-def _fmt_money(val) -> str:
-    if val is None:
-        return "--"
-    try:
-        v = float(val)
-        if v >= 1e8:
-            return f"{v / 1e8:.2f}亿"
-        elif v >= 1e4:
-            return f"{v / 1e4:.1f}万"
-        return f"{v:.0f}"
-    except (ValueError, TypeError):
-        return str(val)
-
-
-def _serialize(obj):
-    """将结果转为 JSON-safe dict"""
-    if isinstance(obj, dict):
-        return {k: _serialize(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_serialize(i) for i in obj]
-    if isinstance(obj, float):
-        if obj != obj:  # NaN
-            return None
-        return round(obj, 6)
-    return obj
-
 
 # ==============================================================
 # CLI 入口
 # ==============================================================
-
-def _parse_args(argv: list[str]) -> dict:
-    result = {}
-    i = 0
-    while i < len(argv):
-        if argv[i].startswith("--"):
-            key = argv[i][2:]
-            # Next arg exists and is not another flag → key-value pair
-            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
-                result[key] = argv[i + 1]
-                i += 2
-            else:
-                # Boolean flag
-                result[key] = True
-                i += 1
-        else:
-            i += 1
-    return result
 
 
 def _build_indicator_overrides(args: dict) -> dict | None:
@@ -863,7 +785,7 @@ def main():
         sys.exit(1)
 
     cmd = sys.argv[1]
-    args = _parse_args(sys.argv[2:])
+    args = parse_args(sys.argv[2:])
     fmt = args.get("format", "text")
 
     # 构建指标参数覆盖

@@ -15,6 +15,7 @@ import json
 from datetime import datetime
 
 import config
+from utils import parse_args
 
 ASSET_TYPES = config.ASSET_TYPES
 ASSET_TYPE_NAMES = config.ASSET_TYPE_NAMES
@@ -158,7 +159,7 @@ def _cli():
 
     wl = Watchlist()
     cmd = sys.argv[1]
-    args = _parse_args(sys.argv[2:])
+    args = parse_args(sys.argv[2:])
 
     if cmd == "add":
         code = args.get("code", "")
@@ -191,20 +192,6 @@ def _cli():
     else:
         print(f"未知命令: {cmd}")
         sys.exit(1)
-
-
-def _parse_args(argv: list[str]) -> dict:
-    """简单的 --key value 参数解析"""
-    result = {}
-    i = 0
-    while i < len(argv):
-        if argv[i].startswith("--") and i + 1 < len(argv):
-            key = argv[i][2:]
-            result[key] = argv[i + 1]
-            i += 2
-        else:
-            i += 1
-    return result
 
 
 if __name__ == "__main__":

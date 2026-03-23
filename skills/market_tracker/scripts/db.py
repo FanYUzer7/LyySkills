@@ -17,6 +17,7 @@ from datetime import datetime
 import pandas as pd
 
 import config
+from utils import parse_args
 
 DB_PATH = config.DB_PATH
 
@@ -405,25 +406,8 @@ def _insert_or_replace(table, conn, keys, data_iter):
 # ==========================================================
 # CLI 入口（独立运行）
 # ==========================================================
-def _parse_args(argv: list[str]) -> dict:
-    args = {}
-    i = 0
-    while i < len(argv):
-        if argv[i].startswith("--"):
-            key = argv[i][2:]
-            if i + 1 < len(argv) and not argv[i + 1].startswith("--"):
-                args[key] = argv[i + 1]
-                i += 2
-            else:
-                args[key] = True
-                i += 1
-        else:
-            i += 1
-    return args
-
-
 def main():
-    args = _parse_args(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
     code = args.get("code", "")
     start_date = args.get("start")
     end_date = args.get("end")
